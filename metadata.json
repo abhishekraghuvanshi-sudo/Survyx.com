@@ -1,0 +1,13 @@
+{
+  "name": "Survyx",
+  "description": "Global Marketplace Platform to Connect, Consult, Buy, Sell & Grow with People, Process, and Technology.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "B2B Marketplace",
+    "Escrow Services",
+    "AI Governance",
+    "Entity Verification"
+  ]
+}
