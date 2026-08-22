@@ -1,5 +1,5 @@
-import React from 'react';
-import { AnimatePresence } from 'motion/react';
+import React, { useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { 
   Building2, 
   ShieldCheck, 
@@ -15,7 +15,13 @@ import {
   Bell,
   CheckCircle2,
   Clock,
-  AlertCircle
+  AlertCircle,
+  LogOut,
+  Users,
+  Sparkles,
+  Plus,
+  Shield,
+  Check
 } from 'lucide-react';
 
 import { UserJourneyProvider, useUserJourney } from './context/UserJourneyContext';
@@ -35,13 +41,17 @@ import Chat from './pages/Chat';
 function AppContent() {
   const {
     state,
+    activeAccount,
+    registeredAccounts,
     setCurrentView,
     loginUser,
+    switchAccount,
     logoutUser,
     setTradeMode
   } = useUserJourney();
 
   const { currentView, user, profile, trustScore, verificationStatus, tradeMode, euid } = state;
+  const [showAccountMenu, setShowAccountMenu] = useState(false);
 
   if (currentView === 'landing' && !user) {
     return (
@@ -56,8 +66,8 @@ function AppContent() {
     return (
       <>
         <Auth 
-          onLogin={(email) => {
-            loginUser(email);
+          onLogin={(email, passwordOrName, customData) => {
+            loginUser(email, passwordOrName, customData);
           }} 
           onBack={() => setCurrentView('landing')} 
         />
@@ -66,42 +76,162 @@ function AppContent() {
     );
   }
 
-  const displayName = profile.authorizedSignatory.split(' ')[0] || user?.name || 'Abhishek';
+  const displayName = profile.authorizedSignatory || user?.name || 'Abhishek Raghuvanshi';
+  const displayFirstName = displayName.split(' ')[0];
   const trustPercent = `${Math.round((trustScore / 1000) * 100)}%`;
 
   return (
-    <div className="min-h-screen pb-28 md:pb-0 md:pl-64 bg-slate-50/50 selection:bg-survyx-blue selection:text-white">
+    <div className="min-h-screen pb-28 md:pb-0 md:pl-64 bg-slate-50/50 selection:bg-survyx-blue selection:text-white font-sans">
       {/* Top Header (Desktop) */}
-      <header className="hidden md:flex fixed top-0 right-0 left-64 h-16 bg-white border-b border-slate-100 z-30 px-8 items-center justify-between shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+      <header className="hidden md:flex fixed top-0 right-0 left-64 h-16 bg-white/95 backdrop-blur-md border-b border-slate-100 z-30 px-8 items-center justify-between shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
         <div className="flex items-center space-x-3">
            <span className="text-[11px] font-black text-survyx-navy tracking-tight uppercase">SURVYX.com</span>
            <span className="text-slate-300">/</span>
-           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono">EUID: {euid}</span>
+           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+             EUID: {euid}
+           </span>
+           <span className="text-slate-300">/</span>
+           <span className="text-[11px] font-black text-slate-700 truncate max-w-xs">
+             {profile.businessName}
+           </span>
         </div>
-        <div className="flex items-center gap-6">
+
+        <div className="flex items-center gap-5">
+           {/* Active Session Storage Indicator */}
+           <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-[10px] font-bold border border-emerald-200/60">
+             <ShieldCheck size={13} className="text-emerald-600" />
+             <span>Registry Session Saved</span>
+           </div>
+
            <button 
              onClick={() => setCurrentView('chat')}
              className="text-slate-400 hover:text-survyx-navy transition-colors relative p-2 rounded-lg hover:bg-slate-50"
-             title="Notifications & Alerts"
+             title="Trade Concierge Notifications"
            >
              <Bell size={18} />
              <div className="absolute top-1.5 right-1.5 w-2 h-2 bg-survyx-blue rounded-full border-2 border-white" />
            </button>
-           <div className="flex items-center gap-3 pl-6 border-l border-slate-100">
-             <div className="text-right">
-                <p className="text-[11px] font-black text-slate-900 leading-none">{displayName}</p>
-                <button 
-                  onClick={logoutUser} 
-                  className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1 hover:text-red-500 transition-colors"
-                >
-                  Sign Out
-                </button>
-             </div>
-             <img 
-               src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}`} 
-               alt={displayName}
-               className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200" 
-             />
+
+           {/* Account & Profile Trigger */}
+           <div className="relative">
+             <button
+               onClick={() => setShowAccountMenu(!showAccountMenu)}
+               className="flex items-center gap-3 pl-4 border-l border-slate-100 hover:opacity-90 transition-all text-left"
+             >
+               <div className="text-right">
+                  <p className="text-[11px] font-black text-slate-900 leading-none">{displayFirstName}</p>
+                  <p className="text-[8px] font-bold text-survyx-blue uppercase tracking-wider mt-0.5">
+                    {activeAccount?.role || 'Buyer'} Account
+                  </p>
+               </div>
+               <img 
+                 src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}`} 
+                 alt={displayName}
+                 className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200" 
+               />
+               <ChevronDown size={14} className="text-slate-400" />
+             </button>
+
+             {/* Account Switcher Dropdown */}
+             <AnimatePresence>
+               {showAccountMenu && (
+                 <>
+                   <div 
+                     className="fixed inset-0 z-40" 
+                     onClick={() => setShowAccountMenu(false)} 
+                   />
+                   <motion.div
+                     initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                     animate={{ opacity: 1, y: 0, scale: 1 }}
+                     exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                     className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 z-50 text-xs"
+                   >
+                     <div className="pb-3 border-b border-slate-100">
+                       <div className="flex items-center justify-between mb-1">
+                         <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Current Entity Session</span>
+                         <span className="text-[9px] font-mono font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">Active</span>
+                       </div>
+                       <p className="text-xs font-black text-slate-900">{displayName}</p>
+                       <p className="text-[10px] text-slate-500 font-medium truncate">{profile.businessName}</p>
+                       <p className="text-[10px] font-mono text-slate-400 mt-1">{user?.email}</p>
+                     </div>
+
+                     {/* Saved accounts to switch */}
+                     <div className="py-3 border-b border-slate-100">
+                       <div className="flex items-center justify-between mb-2">
+                         <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                           <Users size={11} /> Saved Accounts ({registeredAccounts.length})
+                         </span>
+                       </div>
+                       <div className="space-y-1.5 max-h-44 overflow-y-auto">
+                         {registeredAccounts.map((acc) => {
+                           const isCurrent = acc.email.toLowerCase() === user?.email.toLowerCase();
+                           return (
+                             <button
+                               key={acc.id}
+                               onClick={() => {
+                                 switchAccount(acc.id);
+                                 setShowAccountMenu(false);
+                               }}
+                               className={`w-full text-left p-2 rounded-xl border flex items-center justify-between transition-all ${
+                                 isCurrent 
+                                   ? 'bg-blue-50/70 border-blue-200 text-survyx-navy font-bold' 
+                                   : 'bg-slate-50 hover:bg-slate-100 border-slate-200/60 text-slate-700'
+                               }`}
+                             >
+                               <div className="truncate mr-2">
+                                 <p className="text-[11px] font-bold truncate leading-tight">{acc.name}</p>
+                                 <p className="text-[9px] text-slate-500 truncate">{acc.businessName}</p>
+                               </div>
+                               {isCurrent ? (
+                                 <Check size={13} className="text-survyx-blue shrink-0" />
+                               ) : (
+                                 <span className="text-[8px] font-black uppercase tracking-wider text-blue-600 shrink-0">Switch</span>
+                               )}
+                             </button>
+                           );
+                         })}
+                       </div>
+                     </div>
+
+                     <div className="pt-2 flex flex-col gap-1">
+                       <button
+                         onClick={() => {
+                           setShowAccountMenu(false);
+                           setCurrentView('verification');
+                         }}
+                         className="flex items-center gap-2 p-2 text-slate-700 hover:bg-slate-50 rounded-xl font-bold transition-colors"
+                       >
+                         <Building2 size={14} className="text-slate-400" />
+                         <span>Manage Entity Profile</span>
+                       </button>
+
+                       <button
+                         onClick={() => {
+                           setShowAccountMenu(false);
+                           setCurrentView('auth');
+                         }}
+                         className="flex items-center gap-2 p-2 text-slate-700 hover:bg-slate-50 rounded-xl font-bold transition-colors"
+                       >
+                         <Plus size={14} className="text-slate-400" />
+                         <span>Add Another Entity</span>
+                       </button>
+
+                       <button
+                         onClick={() => {
+                           setShowAccountMenu(false);
+                           logoutUser();
+                         }}
+                         className="flex items-center gap-2 p-2 text-red-600 hover:bg-red-50 rounded-xl font-bold transition-colors"
+                       >
+                         <LogOut size={14} />
+                         <span>Sign Out & Clear Session</span>
+                       </button>
+                     </div>
+                   </motion.div>
+                 </>
+               )}
+             </AnimatePresence>
            </div>
         </div>
       </header>
