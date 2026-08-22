@@ -1,29 +1,42 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+/**
+ * SURVYX AI Assistant Client Service
+ * Calls the secure full-stack server endpoint /api/gemini/chat
+ */
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+export interface ChatResponse {
+  reply: string;
+  source?: 'gemini' | 'offline-concierge';
+}
 
-export const getPriyaResponse = async (userMessage: string, context: string) => {
-  const prompt = `
-    You are Priya Krishnamurthy, a senior Registry Officer at SURVYX.COM, an institutional B2B trade registry in India.
-    Your role is to govern trade, ensure compliance, and mediate between buyers and sellers.
-    You are professional, authoritative, yet helpful. You use B2B terminology (Escrow, RFQ, EUID, GST, Compliance Audit).
-    
-    Current User Context: ${context}
-    
-    User says: ${userMessage}
-    
-    Response guidelines:
-    - Keep it concise and professional.
-    - If appropriate, mention the user's EUID or the safety of the Survyx Escrow Vault.
-    - Proactively flag risks if the user mentions a suspicious business practice.
-  `;
-
+export const getPriyaResponse = async (userMessage: string, context: string): Promise<string> => {
   try {
-    const result = await model.generateContent(prompt);
-    return result.response.text();
+    const res = await fetch("/api/gemini/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message: userMessage,
+        context: context,
+      }),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Server returned ${res.status}`);
+    }
+
+    const data: ChatResponse = await res.json();
+    return data.reply || "I am monitoring the trade registry. How can I assist you further?";
   } catch (error) {
-    console.error("Gemini Error:", error);
-    return "I'm currently verifying some registry data. How else can I assist your trade governance today?";
+    console.warn("API Assistant fallback triggered:", error);
+    // Intelligent client-side fallback
+    const msg = userMessage.toLowerCase();
+    if (msg.includes("rfq") || msg.includes("procurement") || msg.includes("buy")) {
+      return "I can assist in optimizing your Request for Quotation (RFQ). Make sure your quantity, tolerance thresholds, and NABL test requirements are specified in your BOM to attract top-tier suppliers.";
+    }
+    if (msg.includes("escrow") || msg.includes("fund") || msg.includes("payment")) {
+      return "Your capital is held within the Survyx Multi-Signature Escrow Vault. Funds can only disburse when both you and your trading partner digitally sign each milestone.";
+    }
+    return "Officer Priya here. I am tracking your active session, EUID verification status, and Escrow Vault balances. How can I assist your trade governance today?";
   }
 };

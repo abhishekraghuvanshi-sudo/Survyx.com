@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   UploadCloud, 
@@ -7,35 +7,64 @@ import {
   FileWarning, 
   Lock, 
   ShieldCheck, 
-  Info,
-  Trash2,
-  ExternalLink,
-  ChevronRight,
-  Eye,
-  CheckCircle2,
-  Clock,
-  AlertCircle
+  Info, 
+  Trash2, 
+  ExternalLink, 
+  ChevronRight, 
+  Eye, 
+  CheckCircle2, 
+  Clock, 
+  AlertCircle 
 } from 'lucide-react';
+import { useUserJourney } from '../context/UserJourneyContext';
 
-interface Document {
+interface DocumentItem {
   id: string;
   name: string;
   type: string;
   category: 'GST' | 'COI' | 'PAN' | 'IDENTITY' | 'OTHER';
   status: 'verified' | 'pending' | 'rejected';
   uploadDate: string;
-  expiryDate?: string;
+  size: string;
 }
 
 export default function Repository() {
-  const [docs, setDocs] = useState<Document[]>([
-    { id: '1', name: 'GST_CERT_2024.pdf', type: 'application/pdf', category: 'GST', status: 'verified', uploadDate: '12 May 2024' },
-    { id: '2', name: 'COI_SVX_SOLUTIONS.pdf', type: 'application/pdf', category: 'COI', status: 'pending', uploadDate: '14 May 2024' },
+  const { state, uploadVerificationDoc } = useUserJourney();
+  const { documents, verificationStatus } = state;
+
+  const [docs, setDocs] = useState<DocumentItem[]>([
+    { 
+      id: 'doc-gst', 
+      name: documents.gst.fileName || 'GST_CERT_27AABCU9603R1ZM.pdf', 
+      type: 'application/pdf', 
+      category: 'GST', 
+      status: documents.gst.status, 
+      uploadDate: documents.gst.uploadedAt || '12 May 2024',
+      size: documents.gst.fileSize || '1.4 MB'
+    },
+    { 
+      id: 'doc-coi', 
+      name: documents.coi.fileName || 'COI_SVX_SOLUTIONS.pdf', 
+      type: 'application/pdf', 
+      category: 'COI', 
+      status: documents.coi.status, 
+      uploadDate: documents.coi.uploadedAt || '14 May 2024',
+      size: documents.coi.fileSize || '2.1 MB'
+    },
+    ...(documents.pan.uploaded ? [{
+      id: 'doc-pan',
+      name: documents.pan.fileName || 'PAN_CARD_AABCU9603R.pdf',
+      type: 'application/pdf',
+      category: 'PAN' as const,
+      status: documents.pan.status,
+      uploadDate: documents.pan.uploadedAt || '14 May 2024',
+      size: documents.pan.fileSize || '1.1 MB'
+    }] : [])
   ]);
 
   const [isDragging, setIsDragging] = useState(false);
   const [uploadError, setUploadError] = useState<{ message: string; action: string } | null>(null);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const validateFile = (file: File) => {
     setUploadError(null);
@@ -59,32 +88,35 @@ export default function Repository() {
       return false;
     }
 
-    // 3. Simulated Corruption Check (Zero byte files)
-    if (file.size === 0) {
-      setUploadError({
-        message: "Corrupted Data Stream Detected",
-        action: "The file appears to be empty or corrupted. Please re-export the document."
-      });
-      return false;
-    }
-
     return true;
   };
 
   const processFiles = (files: FileList) => {
     const file = files[0];
     if (file && validateFile(file)) {
-      // Simulate successful deposit
-      const newDoc: Document = {
+      const now = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+      const newDoc: DocumentItem = {
         id: Math.random().toString(36).substr(2, 9),
         name: file.name,
         type: file.type,
-        category: 'OTHER',
+        category: file.name.toLowerCase().includes('pan') ? 'PAN' : file.name.toLowerCase().includes('coi') ? 'COI' : 'OTHER',
         status: 'pending',
-        uploadDate: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+        uploadDate: now,
+        size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`
       };
+
       setDocs(prev => [newDoc, ...prev]);
+
+      if (file.name.toLowerCase().includes('pan')) {
+        uploadVerificationDoc('pan', { name: file.name, size: newDoc.size });
+      } else if (file.name.toLowerCase().includes('coi')) {
+        uploadVerificationDoc('coi', { name: file.name, size: newDoc.size });
+      }
     }
+  };
+
+  const handleDeleteDoc = (id: string) => {
+    setDocs(prev => prev.filter(d => d.id !== id));
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -110,6 +142,8 @@ export default function Repository() {
     }
   };
 
+  const verifiedPercent = verificationStatus === 'verified' ? 100 : verificationStatus === 'under_review' ? 75 : 60;
+
   return (
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
@@ -120,7 +154,7 @@ export default function Repository() {
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Institutional Repository</h2>
-          <p className="text-slate-500 mt-1">Secure vault for entity credentials and compliance documentation.</p>
+          <p className="text-slate-500 mt-1">Secure vault for entity credentials, licenses, and compliance documentation.</p>
         </div>
         <div className="flex items-center space-x-2 bg-blue-600/10 text-survyx-blue px-4 py-2 rounded-2xl border border-blue-500/20">
            <ShieldCheck size={16} />
@@ -144,12 +178,12 @@ export default function Repository() {
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
-            className={`registry-card p-12 border-2 border-dashed transition-all flex flex-col items-center justify-center text-center cursor-pointer group ${isDragging ? 'border-survyx-blue bg-blue-50/50' : uploadError ? 'border-red-300 bg-red-50/10' : 'border-slate-200 bg-white hover:border-survyx-blue'}`}
+            className={`registry-card p-10 border-2 border-dashed transition-all flex flex-col items-center justify-center text-center cursor-pointer group ${isDragging ? 'border-survyx-blue bg-blue-50/50' : uploadError ? 'border-red-300 bg-red-50/10' : 'border-slate-200 bg-white hover:border-survyx-blue'}`}
           >
-            <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mb-6 transition-all ${isDragging ? 'bg-survyx-blue text-white' : uploadError ? 'bg-red-100 text-red-500' : 'bg-slate-100 text-slate-400 group-hover:bg-blue-50 group-hover:text-survyx-blue'}`}>
-              <UploadCloud size={32} />
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 transition-all ${isDragging ? 'bg-survyx-blue text-white' : uploadError ? 'bg-red-100 text-red-500' : 'bg-slate-100 text-slate-400 group-hover:bg-blue-50 group-hover:text-survyx-blue'}`}>
+              <UploadCloud size={28} />
             </div>
-            <h3 className={`text-lg font-bold mb-2 ${uploadError ? 'text-red-900' : 'text-slate-900'}`}>
+            <h3 className={`text-base font-bold mb-1.5 ${uploadError ? 'text-red-900' : 'text-slate-900'}`}>
               {uploadError ? 'Deposit Failure' : 'Registry Deposit Zone'}
             </h3>
             <p className={`text-xs max-w-xs mx-auto leading-relaxed ${uploadError ? 'text-red-700 font-bold' : 'text-slate-500'}`}>
@@ -178,21 +212,21 @@ export default function Repository() {
             </AnimatePresence>
 
             {!uploadError && (
-              <div className="mt-8 flex gap-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                <span className="px-3 py-1 bg-slate-100 rounded-full">PDF</span>
-                <span className="px-3 py-1 bg-slate-100 rounded-full">JPG</span>
-                <span className="px-3 py-1 bg-slate-100 rounded-full">MAX 10MB</span>
+              <div className="mt-6 flex gap-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                <span className="px-2.5 py-1 bg-slate-100 rounded-md">PDF</span>
+                <span className="px-2.5 py-1 bg-slate-100 rounded-md">JPG</span>
+                <span className="px-2.5 py-1 bg-slate-100 rounded-md">MAX 10MB</span>
               </div>
             )}
           </div>
 
           <div className="space-y-4">
-            <h3 className="text-sm font-bold uppercase text-slate-400 tracking-widest flex items-center gap-2">
-              <Lock size={14} /> Repository Vault
+            <h3 className="text-sm font-bold uppercase text-slate-500 tracking-widest flex items-center gap-2">
+              <Lock size={14} /> Repository Vault ({docs.length} Documents)
             </h3>
             <div className="space-y-3">
               {docs.map(doc => (
-                <DocumentListItem key={doc.id} doc={doc} />
+                <DocumentListItem key={doc.id} doc={doc} onDelete={() => handleDeleteDoc(doc.id)} />
               ))}
             </div>
           </div>
@@ -205,13 +239,16 @@ export default function Repository() {
                <h4 className="text-[10px] font-bold text-blue-300 uppercase tracking-widest mb-4">Verification Health</h4>
                <div className="flex items-center justify-between mb-2">
                   <span className="text-xs">Compliance Audit</span>
-                  <span className="text-xs font-bold font-mono">65%</span>
+                  <span className="text-xs font-bold font-mono">{verifiedPercent}%</span>
                </div>
                <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
-                  <div className="bg-survyx-blue h-full w-[65%]"></div>
+                  <div 
+                    className="bg-survyx-blue h-full transition-all duration-500"
+                    style={{ width: `${verifiedPercent}%` }}
+                  />
                </div>
                <p className="text-[10px] text-slate-400 mt-4 leading-relaxed">
-                 Entity validation tier will remain <span className="text-white font-bold">TEMPORARY</span> until COI and GST are audited by your Registry Officer.
+                 Entity validation tier: <span className="text-white font-bold uppercase">{state.governanceTier}</span>. Monitored by Officer Priya Krishnamurthy.
                </p>
              </div>
              <div className="absolute -right-6 -bottom-6 opacity-10">
@@ -222,22 +259,22 @@ export default function Repository() {
           <div className="registry-card p-6 space-y-4">
             <h4 className="text-xs font-bold text-slate-900 uppercase tracking-tight">Requirement Checklist</h4>
             <div className="space-y-3">
-              <CheckItem label="GST Registration Certificate" completed />
-              <CheckItem label="Certificate of Incorporation" pending />
-              <CheckItem label="PAN Card (Business)" pending />
-              <CheckItem label="Director Identity Proof" />
-              <CheckItem label="Utility Bill (Office Proof)" />
+              <CheckItem label="GST Registration Certificate" completed={documents.gst.uploaded} />
+              <CheckItem label="PAN Card (Entity / Signatory)" completed={documents.pan.uploaded} pending={!documents.pan.uploaded} />
+              <CheckItem label="Certificate of Incorporation (COI)" completed={documents.coi.uploaded} pending={!documents.coi.uploaded} />
+              <CheckItem label="Director Identity Proof" completed={verificationStatus === 'verified'} />
+              <CheckItem label="Audited Financial Statements" completed={verificationStatus === 'verified'} />
             </div>
           </div>
 
-          <div className="bg-orange-50 border border-orange-100 rounded-3xl p-6 flex gap-4">
-             <div className="text-orange-500 mt-1">
-                <Info size={20} />
+          <div className="bg-orange-50 border border-orange-100 rounded-3xl p-5 flex gap-3.5">
+             <div className="text-orange-500 mt-0.5 shrink-0">
+                <Info size={18} />
              </div>
              <div>
                 <p className="text-xs font-bold text-orange-900 uppercase tracking-tight">Audit Notice</p>
                 <p className="text-[11px] text-orange-800 leading-relaxed mt-1">
-                  Priya K. is currently monitoring your uploads. Real-time verification is active for session ID <span className="font-mono">SVX-AUD-991</span>.
+                  Senior Officer Priya K. is monitoring active session <span className="font-mono font-bold">{state.euid}</span>. Real-time verification is synchronized.
                 </p>
              </div>
           </div>
@@ -247,60 +284,63 @@ export default function Repository() {
   );
 }
 
-function DocumentListItem({ doc }: { doc: Document, key?: any }) {
+function DocumentListItem({ doc, onDelete }: { key?: React.Key; doc: DocumentItem; onDelete: () => void }) {
   const statusStyles = {
-    verified: 'bg-green-50 text-green-700 border-green-100',
-    pending: 'bg-blue-50 text-survyx-blue border-blue-100',
-    rejected: 'bg-red-50 text-red-700 border-red-100'
+    verified: 'bg-green-50 text-green-700 border-green-200',
+    pending: 'bg-blue-50 text-survyx-blue border-blue-200',
+    rejected: 'bg-red-50 text-red-700 border-red-200'
   };
 
   const StatusIcon = {
-    verified: <FileCheck size={16} />,
-    pending: <Clock size={16} />,
-    rejected: <FileWarning size={16} />
+    verified: <FileCheck size={14} />,
+    pending: <Clock size={14} />,
+    rejected: <FileWarning size={14} />
   };
 
   return (
-    <div className="registry-card p-4 hover:border-survyx-blue flex items-center justify-between group">
+    <div className="registry-card p-4 hover:border-survyx-blue flex items-center justify-between group transition-all bg-white border border-slate-100 shadow-sm">
       <div className="flex items-center space-x-4">
-        <div className={`p-3 rounded-2xl ${doc.status === 'verified' ? 'bg-green-50' : 'bg-slate-100'} text-slate-400 group-hover:text-survyx-blue transition-colors`}>
-          <FileText size={20} />
+        <div className={`p-2.5 rounded-xl ${doc.status === 'verified' ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-400'} group-hover:text-survyx-blue transition-colors`}>
+          <FileText size={18} />
         </div>
         <div>
-          <p className="text-sm font-bold text-slate-900">{doc.name}</p>
+          <p className="text-xs font-bold text-slate-900">{doc.name}</p>
           <div className="flex items-center gap-2 mt-0.5">
-            <span className="text-[9px] font-mono text-slate-400">{doc.category}</span>
+            <span className="text-[9px] font-mono text-slate-500 font-bold">{doc.category}</span>
             <span className="text-slate-300">•</span>
-            <span className="text-[9px] font-mono text-slate-400">Uploaded {doc.uploadDate}</span>
+            <span className="text-[9px] font-mono text-slate-400">{doc.size}</span>
+            <span className="text-slate-300">•</span>
+            <span className="text-[9px] font-mono text-slate-400">{doc.uploadDate}</span>
           </div>
         </div>
       </div>
-      <div className="flex items-center gap-4">
-        <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-bold uppercase tracking-widest ${statusStyles[doc.status]}`}>
+      <div className="flex items-center gap-3">
+        <div className={`flex items-center gap-1 px-2.5 py-1 rounded-md border text-[9px] font-black uppercase tracking-widest ${statusStyles[doc.status]}`}>
           {StatusIcon[doc.status]}
           {doc.status}
         </div>
-        <button className="p-2 text-slate-300 hover:text-survyx-blue transition-colors rounded-lg hover:bg-slate-50">
-          <Eye size={18} />
-        </button>
-        <button className="p-2 text-slate-300 hover:text-red-500 transition-colors rounded-lg hover:bg-red-50">
-          <Trash2 size={18} />
+        <button 
+          onClick={onDelete}
+          className="p-1.5 text-slate-300 hover:text-red-500 transition-colors rounded-lg hover:bg-red-50"
+          title="Delete document"
+        >
+          <Trash2 size={16} />
         </button>
       </div>
     </div>
   );
 }
 
-function CheckItem({ label, completed, pending }: { label: string, completed?: boolean, pending?: boolean }) {
+function CheckItem({ label, completed, pending }: { label: string; completed?: boolean; pending?: boolean }) {
   return (
     <div className="flex items-center justify-between group">
-      <div className="flex items-center gap-3">
-        <div className={`w-5 h-5 rounded-md flex items-center justify-center transition-all ${completed ? 'bg-green-500 text-white' : pending ? 'bg-blue-100 text-survyx-blue' : 'bg-slate-100 text-slate-300'}`}>
-          {completed ? <CheckCircle2 size={12} /> : pending ? <Clock size={12} /> : <div className="w-1 h-1 rounded-full bg-slate-300" />}
+      <div className="flex items-center gap-2.5">
+        <div className={`w-4 h-4 rounded-md flex items-center justify-center transition-all ${completed ? 'bg-green-500 text-white' : pending ? 'bg-blue-100 text-survyx-blue' : 'bg-slate-100 text-slate-300'}`}>
+          {completed ? <CheckCircle2 size={10} /> : pending ? <Clock size={10} /> : <div className="w-1 h-1 rounded-full bg-slate-300" />}
         </div>
-        <span className={`text-[11px] font-medium transition-colors ${completed ? 'text-slate-900' : 'text-slate-500'}`}>{label}</span>
+        <span className={`text-xs transition-colors ${completed ? 'font-bold text-slate-900' : 'text-slate-500'}`}>{label}</span>
       </div>
-      {completed && <span className="text-[9px] font-bold text-green-600 uppercase tracking-tighter">Verified</span>}
+      {completed && <span className="text-[8px] font-black text-green-600 uppercase tracking-tighter">Verified</span>}
     </div>
   );
 }
