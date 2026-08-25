@@ -27,6 +27,7 @@ import {
 import { UserJourneyProvider, useUserJourney } from './context/UserJourneyContext';
 import { NavButton, MobileNavBtn } from './components/Navigation';
 import SurvyxAiBot from './components/SurvyxAiBot';
+import SessionCountdownTimer from './components/SessionCountdownTimer';
 
 // Pages
 import Landing from './pages/Landing';
@@ -82,6 +83,17 @@ function AppContent() {
 
   return (
     <div className="min-h-screen pb-28 md:pb-0 md:pl-64 bg-slate-50/50 selection:bg-survyx-blue selection:text-white font-sans">
+      {/* Mobile Top Header with Session Countdown */}
+      <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white/95 backdrop-blur-md border-b border-slate-200 z-40 px-4 flex items-center justify-between">
+        <div className="flex items-center space-x-2">
+          <div className="w-6 h-6 bg-survyx-navy rounded-lg flex items-center justify-center font-black text-white text-xs">
+            S
+          </div>
+          <span className="text-xs font-black text-survyx-navy tracking-tight">SURVYX</span>
+        </div>
+        <SessionCountdownTimer onSessionExpired={logoutUser} />
+      </div>
+
       {/* Top Header (Desktop) */}
       <header className="hidden md:flex fixed top-0 right-0 left-64 h-16 bg-white/95 backdrop-blur-md border-b border-slate-100 z-30 px-8 items-center justify-between shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
         <div className="flex items-center space-x-3">
@@ -96,11 +108,14 @@ function AppContent() {
            </span>
         </div>
 
-        <div className="flex items-center gap-5">
+        <div className="flex items-center gap-4">
+           {/* Visual Session Expiration Countdown Timer */}
+           <SessionCountdownTimer onSessionExpired={logoutUser} />
+
            {/* Active Session Storage Indicator */}
            <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-[10px] font-bold border border-emerald-200/60">
              <ShieldCheck size={13} className="text-emerald-600" />
-             <span>Registry Session Saved</span>
+             <span>Encrypted Session</span>
            </div>
 
            <button 
