@@ -125,11 +125,8 @@ function AppContent() {
     <div className="min-h-screen pb-28 md:pb-0 md:pl-64 bg-slate-50/50 selection:bg-survyx-blue selection:text-white font-sans">
       {/* Mobile Top Header with Session Countdown */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white/95 backdrop-blur-md border-b border-slate-200 z-40 px-4 flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <div className="w-6 h-6 bg-survyx-navy rounded-lg flex items-center justify-center font-black text-white text-xs">
-            S
-          </div>
-          <span className="text-xs font-black text-survyx-navy tracking-tight">SURVYX</span>
+        <div className="flex items-center cursor-pointer" onClick={() => setCurrentView('dashboard')}>
+          <SurvyxLogo size="sm" variant="dark" subtitle="Escrow Protocol" showMarketplaceBadge={false} />
         </div>
         <SessionCountdownTimer onSessionExpired={logoutUser} />
       </div>

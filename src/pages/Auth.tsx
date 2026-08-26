@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ShieldCheck, 
@@ -13,7 +13,6 @@ import {
   EyeOff, 
   Phone, 
   Linkedin, 
-  Chrome, 
   CheckCircle2, 
   Sparkles, 
   KeyRound, 
@@ -27,11 +26,48 @@ import {
   BadgeCheck,
   Award,
   Hash,
-  ExternalLink
+  ExternalLink,
+  MessageSquare,
+  Clock,
+  ArrowLeft,
+  CheckCircle
 } from 'lucide-react';
 import { useUserJourney } from '../context/UserJourneyContext';
 import { UserAccount, getRememberedCredentials, setRememberedCredentials, DEFAULT_ACCOUNTS } from '../lib/authStorage';
 import SurvyxLogo from '../components/SurvyxLogo';
+
+// Authentic Google Multi-Color SVG Icon
+function GoogleIcon({ size = 18, className = '' }: { size?: number; className?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className}>
+      <path
+        fill="#4285F4"
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+      />
+    </svg>
+  );
+}
+
+const COUNTRY_CODES = [
+  { code: '+91', country: 'India', flag: '🇮🇳', placeholder: '98200 12345' },
+  { code: '+1', country: 'USA / Canada', flag: '🇺🇸', placeholder: '555 123 4567' },
+  { code: '+44', country: 'United Kingdom', flag: '🇬🇧', placeholder: '7911 123456' },
+  { code: '+971', country: 'UAE', flag: '🇦🇪', placeholder: '50 123 4567' },
+  { code: '+65', country: 'Singapore', flag: '🇸🇬', placeholder: '8123 4567' },
+  { code: '+49', country: 'Germany', flag: '🇩🇪', placeholder: '151 2345678' }
+];
 
 interface AuthProps {
   onLogin: (email: string, passwordOrName?: string, customData?: Partial<UserAccount>) => { success?: boolean; error?: string; account?: UserAccount; requiresRegistration?: boolean } | void;
@@ -42,15 +78,30 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
   const { registerUser, registeredAccounts, loginUser } = useUserJourney();
 
   const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [method, setMethod] = useState<'email' | 'phone'>('email');
+  // Authentication Method: 'gmail' | 'phone' | 'email'
+  const [authMethod, setAuthMethod] = useState<'gmail' | 'phone' | 'email'>('gmail');
 
-  // Login State
+  // Gmail / Google ID State
+  const [gmailId, setGmailId] = useState('abhishek.raghuvanshi@gmail.com');
+  const [showGoogleAccountModal, setShowGoogleAccountModal] = useState(false);
+  const [googleCustomEmail, setGoogleCustomEmail] = useState('');
+  const [googleCustomName, setGoogleCustomName] = useState('');
+  const [googleCustomCompany, setGoogleCustomCompany] = useState('');
+  const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
+
+  // Phone & OTP Login State
+  const [countryCode, setCountryCode] = useState('+91');
+  const [phone, setPhone] = useState('98200 12345');
+  const [otpSent, setOtpSent] = useState(false);
+  const [generatedOtp, setGeneratedOtp] = useState('482915');
+  const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
+  const [otpTimer, setOtpTimer] = useState(30);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [smsToast, setSmsToast] = useState<{ show: boolean; code: string; phone: string } | null>(null);
+
+  // Email / Password Login State
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [phone, setPhone] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
-  const [otpValue, setOtpValue] = useState('');
-  const [otpTimer, setOtpTimer] = useState(30);
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
@@ -67,7 +118,13 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
   const [regState, setRegState] = useState('Maharashtra');
   const [regIndustry, setRegIndustry] = useState('Renewable Energy Infrastructure');
   const [regEmail, setRegEmail] = useState('');
+  const [regCountryCode, setRegCountryCode] = useState('+91');
   const [regPhone, setRegPhone] = useState('');
+  const [regPhoneVerified, setRegPhoneVerified] = useState(false);
+  const [regPhoneOtpSent, setRegPhoneOtpSent] = useState(false);
+  const [regPhoneOtpDigits, setRegPhoneOtpDigits] = useState(['', '', '', '', '', '']);
+  const [regGeneratedOtp, setRegGeneratedOtp] = useState('592814');
+  const [regOtpTimer, setRegOtpTimer] = useState(30);
   const [regPassword, setRegPassword] = useState('');
   const [regConfirmPassword, setRegConfirmPassword] = useState('');
   const [regRole, setRegRole] = useState<'buyer' | 'supplier'>('buyer');
@@ -77,6 +134,10 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
   // Registration Success Modal State
   const [registeredAccount, setRegisteredAccount] = useState<UserAccount | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+
+  // OTP Input refs
+  const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const regOtpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   // Load remembered credentials on mount
   useEffect(() => {
@@ -88,13 +149,12 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
       }
       setRememberMe(true);
     } else {
-      // Default initial placeholder
       setEmail('abhishek.raghuvanshi@survyx.com');
       setPassword('password123');
     }
   }, []);
 
-  // OTP Countdown timer
+  // OTP Countdown timer for Login
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (otpSent && otpTimer > 0) {
@@ -105,76 +165,274 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
     return () => clearInterval(interval);
   }, [otpSent, otpTimer]);
 
-  const handleSendOtp = () => {
-    if (!phone || phone.length < 10) {
-      setError('Please enter a valid 10-digit mobile number.');
+  // OTP Countdown timer for Registration
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (regPhoneOtpSent && regOtpTimer > 0 && !regPhoneVerified) {
+      interval = setInterval(() => {
+        setRegOtpTimer(prev => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [regPhoneOtpSent, regOtpTimer, regPhoneVerified]);
+
+  // -------------------------------------------------------------
+  // GMAIL / GOOGLE LOGIN HANDLERS
+  // -------------------------------------------------------------
+  const handleGmailSignIn = (selectedGmail: string, displayName?: string, companyName?: string) => {
+    setError('');
+    setIsGoogleSigningIn(true);
+    
+    setTimeout(() => {
+      const cleanEmail = selectedGmail.trim().toLowerCase();
+      const userName = displayName || (cleanEmail.includes('abhishek') 
+        ? 'Abhishek Raghuvanshi' 
+        : cleanEmail.split('@')[0].replace('.', ' ').replace(/\b\w/g, l => l.toUpperCase()));
+      
+      const bName = companyName || (cleanEmail.includes('abhishek')
+        ? 'KUMAR INDUSTRIAL SOLUTIONS PVT LTD'
+        : `${userName.split(' ')[0].toUpperCase()} ENTERPRISES PVT LTD`);
+
+      const res = loginUser(cleanEmail, 'Google Workspace SSO User', {
+        name: userName,
+        businessName: bName,
+        industryCategory: 'Renewable Energy Infrastructure',
+        role: 'buyer',
+        email: cleanEmail,
+        isNewRegistration: true
+      });
+
+      setIsGoogleSigningIn(false);
+      setShowGoogleAccountModal(false);
+
+      if (res && !res.success) {
+        setError(res.error || 'Google Authentication failed. Please try again.');
+      }
+    }, 600);
+  };
+
+  const handleCustomGoogleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!googleCustomEmail || !googleCustomEmail.includes('@')) {
+      setError('Please enter a valid Gmail or Google Workspace email address.');
+      return;
+    }
+    handleGmailSignIn(
+      googleCustomEmail, 
+      googleCustomName || undefined, 
+      googleCustomCompany || undefined
+    );
+  };
+
+  // -------------------------------------------------------------
+  // PHONE OTP LOGIN HANDLERS
+  // -------------------------------------------------------------
+  const handleSendPhoneOtp = () => {
+    const rawDigits = phone.replace(/\D/g, '');
+    if (rawDigits.length < 8) {
+      setError('Please enter a valid contact number (at least 8-10 digits).');
       return;
     }
     setError('');
-    setOtpSent(true);
-    setOtpTimer(30);
-    setSuccessMsg('SURVYX-AUTH: Verification OTP sent via SMS. Enter 123456 to verify.');
-    setTimeout(() => setSuccessMsg(''), 5000);
+    setIsSendingOtp(true);
+
+    // Generate random 6-digit OTP
+    const newCode = Math.floor(100000 + Math.random() * 900000).toString();
+    setGeneratedOtp(newCode);
+
+    setTimeout(() => {
+      setIsSendingOtp(false);
+      setOtpSent(true);
+      setOtpTimer(30);
+      setOtpDigits(['', '', '', '', '', '']);
+      
+      // Dispatch simulated SMS banner
+      const fullPhone = `${countryCode} ${phone.trim()}`;
+      setSmsToast({ show: true, code: newCode, phone: fullPhone });
+      setSuccessMsg(`SURVYX-AUTH: SMS OTP sent to ${fullPhone}. Code: ${newCode}`);
+      
+      // Focus first digit box
+      setTimeout(() => {
+        otpInputRefs.current[0]?.focus();
+      }, 100);
+    }, 600);
   };
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleOtpDigitChange = (index: number, value: string) => {
+    // Only allow numbers
+    const cleanVal = value.replace(/\D/g, '');
+    if (!cleanVal && value !== '') return;
+
+    const newDigits = [...otpDigits];
+
+    if (cleanVal.length > 1) {
+      // Handle paste
+      const pastedChars = cleanVal.slice(0, 6).split('');
+      pastedChars.forEach((char, i) => {
+        if (i < 6) newDigits[i] = char;
+      });
+      setOtpDigits(newDigits);
+      const nextIdx = Math.min(pastedChars.length, 5);
+      otpInputRefs.current[nextIdx]?.focus();
+      return;
+    }
+
+    newDigits[index] = cleanVal;
+    setOtpDigits(newDigits);
+
+    // Auto-advance to next box
+    if (cleanVal && index < 5) {
+      otpInputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
+      otpInputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleAutoFillOtp = (codeToFill: string) => {
+    const chars = codeToFill.split('');
+    setOtpDigits(chars);
+    setError('');
+  };
+
+  const handleVerifyPhoneOtpLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    const fullEnteredOtp = otpDigits.join('');
+    if (fullEnteredOtp.length !== 6) {
+      setError('Please enter the complete 6-digit OTP sent via SMS.');
+      return;
+    }
+
+    if (fullEnteredOtp !== generatedOtp && fullEnteredOtp !== '123456' && fullEnteredOtp !== '482915') {
+      setError(`Invalid OTP. Please enter the statutory OTP: ${generatedOtp}`);
+      return;
+    }
+
+    const fullPhone = `${countryCode} ${phone.trim()}`;
+    // Check if phone matches an existing account
+    const accounts = registeredAccounts;
+    const cleanDigits = phone.replace(/\D/g, '');
+    const matched = accounts.find(a => a.phone.replace(/\D/g, '').includes(cleanDigits));
+
+    if (matched) {
+      loginUser(matched.email, 'Mobile Sign In', { phone: fullPhone, rememberMe });
+    } else {
+      // Auto-register a verified mobile entity session
+      loginUser(fullPhone, 'Mobile Sign In', {
+        name: `Contact Signatory (${phone.slice(-4)})`,
+        businessName: 'INDUSTRIAL COMMERCE ENTERPRISE',
+        phone: fullPhone,
+        email: `auth.${cleanDigits}@survyx.com`,
+        role: 'buyer',
+        isNewRegistration: true,
+        rememberMe
+      });
+    }
+  };
+
+  // -------------------------------------------------------------
+  // REGISTRATION PHONE OTP HANDLERS
+  // -------------------------------------------------------------
+  const handleSendRegPhoneOtp = () => {
+    const cleanDigits = regPhone.replace(/\D/g, '');
+    if (cleanDigits.length < 8) {
+      setError('Please enter a valid 10-digit direct phone number.');
+      return;
+    }
+    setError('');
+    const newCode = Math.floor(100000 + Math.random() * 900000).toString();
+    setRegGeneratedOtp(newCode);
+    setRegPhoneOtpSent(true);
+    setRegOtpTimer(30);
+    setRegPhoneOtpDigits(['', '', '', '', '', '']);
+    
+    const fullPhone = `${regCountryCode} ${regPhone.trim()}`;
+    setSmsToast({ show: true, code: newCode, phone: fullPhone });
+    setSuccessMsg(`SMS OTP sent to ${fullPhone}. Code: ${newCode}`);
+
+    setTimeout(() => {
+      regOtpInputRefs.current[0]?.focus();
+    }, 100);
+  };
+
+  const handleRegOtpDigitChange = (index: number, value: string) => {
+    const cleanVal = value.replace(/\D/g, '');
+    const newDigits = [...regPhoneOtpDigits];
+
+    if (cleanVal.length > 1) {
+      const pastedChars = cleanVal.slice(0, 6).split('');
+      pastedChars.forEach((char, i) => {
+        if (i < 6) newDigits[i] = char;
+      });
+      setRegPhoneOtpDigits(newDigits);
+      const nextIdx = Math.min(pastedChars.length, 5);
+      regOtpInputRefs.current[nextIdx]?.focus();
+      return;
+    }
+
+    newDigits[index] = cleanVal;
+    setRegPhoneOtpDigits(newDigits);
+
+    if (cleanVal && index < 5) {
+      regOtpInputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleVerifyRegPhoneOtp = () => {
+    const entered = regPhoneOtpDigits.join('');
+    if (entered === regGeneratedOtp || entered === '123456' || entered === '592814') {
+      setRegPhoneVerified(true);
+      setError('');
+      setSuccessMsg('✓ Mobile contact number verified successfully via SMS OTP!');
+    } else {
+      setError(`Invalid OTP. Enter the statutory SMS code: ${regGeneratedOtp}`);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // TRADITIONAL EMAIL / PASSWORD LOGIN HANDLER
+  // -------------------------------------------------------------
+  const handleEmailLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setUnregisteredEmail(null);
 
-    if (method === 'email') {
-      const cleanEmail = email.trim().toLowerCase();
-      if (!cleanEmail) {
-        setError('Please provide your professional email address.');
-        return;
-      }
-      if (!password) {
-        setError('Please enter your account access password.');
-        return;
-      }
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
+      setError('Please provide your professional email address.');
+      return;
+    }
+    if (!password) {
+      setError('Please enter your account access password.');
+      return;
+    }
 
-      // Check against registered accounts via context loginUser
-      const res = loginUser(cleanEmail, password, { rememberMe });
-      if (res && !res.success) {
-        setError(res.error || 'Authentication failed. Please verify credentials or register.');
-        if (res.requiresRegistration) {
-          setUnregisteredEmail(cleanEmail);
-        }
-        return;
+    const res = loginUser(cleanEmail, password, { rememberMe });
+    if (res && !res.success) {
+      setError(res.error || 'Authentication failed. Please verify credentials or register.');
+      if (res.requiresRegistration) {
+        setUnregisteredEmail(cleanEmail);
       }
+      return;
+    }
 
-      // Save remembered credentials if checked
-      if (rememberMe) {
-        setRememberedCredentials({
-          email: cleanEmail,
-          password: password,
-          remember: true
-        });
-      }
-    } else {
-      // Phone method
-      const cleanPhone = phone.trim();
-      if (!cleanPhone) {
-        setError('Please provide your registered mobile number.');
-        return;
-      }
-      if (!otpSent) {
-        handleSendOtp();
-        return;
-      }
-      if (otpValue !== '123456' && otpValue.length < 4) {
-        setError('Invalid OTP. Use statutory test OTP: 123456');
-        return;
-      }
-
-      const res = loginUser(cleanPhone, 'Mobile Sign In', { phone: cleanPhone, rememberMe });
-      if (res && !res.success) {
-        setError(res.error || 'Mobile number is not registered. Please register your entity first.');
-        return;
-      }
+    if (rememberMe) {
+      setRememberedCredentials({
+        email: cleanEmail,
+        password: password,
+        remember: true
+      });
     }
   };
 
+  // -------------------------------------------------------------
+  // REGISTRATION FORM SUBMIT HANDLER
+  // -------------------------------------------------------------
   const handleRegisterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -188,11 +446,11 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
       return;
     }
     if (!regEmail.trim() || !regEmail.includes('@')) {
-      setError('Please provide a valid corporate email address.');
+      setError('Please provide a valid corporate email address or Gmail ID.');
       return;
     }
-    if (!regPhone.trim() || regPhone.length < 10) {
-      setError('Please enter a valid 10-digit business phone number.');
+    if (!regPhone.trim() || regPhone.replace(/\D/g, '').length < 8) {
+      setError('Please enter a valid business contact number.');
       return;
     }
     if (!regPassword || regPassword.length < 6) {
@@ -208,9 +466,9 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
       return;
     }
 
-    // Register user through context
     const cleanGstin = regGstin.trim().toUpperCase() || '27AABCU9603R1ZM';
     const pan = cleanGstin.length >= 12 ? cleanGstin.substring(2, 12) : 'AABCU9603R';
+    const fullPhone = `${regCountryCode} ${regPhone.trim()}`;
 
     const res = registerUser({
       name: regName.trim(),
@@ -220,7 +478,7 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
       state: regState,
       industryCategory: regIndustry,
       email: regEmail.trim().toLowerCase(),
-      phone: regPhone.trim(),
+      phone: fullPhone,
       password: regPassword,
       role: regRole,
       rememberMe: true
@@ -253,19 +511,6 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
     loginUser(account.email, account.password || 'password123', account);
   };
 
-  const handleSocialLogin = (provider: 'Google' | 'LinkedIn') => {
-    const defaultEmail = provider === 'Google' 
-      ? 'abhishek.raghuvanshi@survyx.com' 
-      : 'abhishek.linkedin@survyx.com';
-
-    loginUser(defaultEmail, `${provider} SSO User`, {
-      name: 'Abhishek Raghuvanshi',
-      businessName: 'KUMAR INDUSTRIAL SOLUTIONS PVT LTD',
-      industryCategory: 'Renewable Energy Infrastructure',
-      role: 'buyer'
-    });
-  };
-
   const switchToRegisterWithEmail = (prefillEmail: string) => {
     setRegEmail(prefillEmail);
     setMode('register');
@@ -274,11 +519,66 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden font-sans">
+    <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-10 px-4 sm:px-6 lg:px-8 relative overflow-hidden font-sans">
       {/* Top Background Pattern */}
       <div className="absolute inset-0 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:24px_24px] opacity-40 pointer-events-none" />
       <div className="absolute -top-40 -right-40 w-96 h-96 bg-blue-100/50 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-slate-200/50 rounded-full blur-3xl pointer-events-none" />
+
+      {/* Simulated Live SMS Notification Toast */}
+      <AnimatePresence>
+        {smsToast && smsToast.show && (
+          <motion.div
+            initial={{ opacity: 0, y: -40, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className="fixed top-5 right-5 z-50 max-w-sm w-full bg-slate-900 text-white rounded-2xl p-4 shadow-2xl border border-blue-500/40 backdrop-blur-xl"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0 border border-blue-400/30">
+                  <Smartphone size={16} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-blue-300">SURVYX-SECURE-SMS</span>
+                    <span className="text-[9px] text-slate-400 font-mono">Just now</span>
+                  </div>
+                  <p className="text-xs text-slate-200 mt-0.5">
+                    Your verification OTP for <strong>{smsToast.phone}</strong> is:
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setSmsToast(null)}
+                className="text-slate-400 hover:text-white text-xs font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mt-3 flex items-center justify-between bg-slate-800/80 rounded-xl p-2.5 border border-slate-700">
+              <span className="text-lg font-mono font-black text-amber-400 tracking-[0.3em]">
+                {smsToast.code}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  if (mode === 'login' && authMethod === 'phone') {
+                    handleAutoFillOtp(smsToast.code);
+                  } else if (mode === 'register') {
+                    setRegPhoneOtpDigits(smsToast.code.split(''));
+                  }
+                  setSmsToast(null);
+                }}
+                className="px-2.5 py-1 bg-survyx-blue hover:bg-blue-600 text-white text-[10px] font-black uppercase tracking-wider rounded-lg transition-all shadow-xs"
+              >
+                Auto-fill Code
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Back Button */}
       <div className="absolute top-6 left-6 z-20">
@@ -293,10 +593,10 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
 
       <div className="sm:mx-auto sm:w-full sm:max-w-xl text-center relative z-10 flex flex-col items-center">
         <div className="mb-3">
-          <SurvyxLogo size="lg" variant="dark" subtitle="People • Process • Technology" />
+          <SurvyxLogo size="lg" variant="dark" subtitle="India's Sovereign B2B Marketplace & Escrow Protocol" />
         </div>
         <p className="mt-1 text-xs text-slate-500 font-bold uppercase tracking-[0.2em]">
-          {mode === 'login' ? 'Institutional Access & Saved Registry Authentication' : 'Register New Enterprise Entity'}
+          {mode === 'login' ? 'Institutional Access & Multi-Factor Authentication' : 'Register New Enterprise Entity'}
         </p>
       </div>
 
@@ -309,7 +609,7 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
           <div className="mb-6 flex items-center justify-between bg-slate-50 border border-slate-200/80 rounded-2xl p-3 text-xs">
             <div className="flex items-center gap-2 text-slate-700">
               <ShieldCheck size={16} className="text-emerald-500 shrink-0" />
-              <span className="font-bold text-[11px]">256-Bit Encrypted Registry Storage Active</span>
+              <span className="font-bold text-[11px]">256-Bit Encrypted Sovereign Registry Auth Active</span>
             </div>
             <span className="text-[10px] font-mono text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
               {registeredAccounts.length} Verified Entities
@@ -342,260 +642,417 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
             </button>
           </div>
 
-          {/* Quick Demo 1-Click Pre-authenticated Accounts Bar */}
-          {mode === 'login' && (
-            <div className="mb-6 bg-blue-50/60 border border-blue-100 rounded-2xl p-3.5">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-black uppercase tracking-wider text-survyx-navy flex items-center gap-1.5">
-                  <Sparkles size={12} className="text-survyx-blue" />
-                  Pre-Registered Institutional Accounts:
-                </span>
-                <span className="text-[9px] font-bold text-blue-600">1-Click Fast Auth</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                {registeredAccounts.slice(0, 3).map((acc) => (
-                  <button
-                    key={acc.id}
-                    type="button"
-                    onClick={() => handleQuickLogin(acc)}
-                    className="text-left p-2 bg-white hover:bg-survyx-navy hover:text-white border border-blue-200/80 rounded-xl transition-all group shadow-sm active:scale-95"
-                  >
-                    <div className="flex items-center justify-between">
-                      <p className="text-[10px] font-black text-slate-900 group-hover:text-white truncate">
-                        {acc.name.split(' ')[0]}
-                      </p>
-                      <span className="text-[8px] font-mono px-1 bg-blue-100 text-blue-700 group-hover:bg-blue-600 group-hover:text-white rounded">
-                        {acc.role}
-                      </span>
-                    </div>
-                    <p className="text-[8px] text-slate-500 group-hover:text-slate-300 truncate font-mono mt-0.5">
-                      {acc.businessName.split(' ')[0]}
-                    </p>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* LOGIN FORM */}
+          {/* LOGIN VIEW */}
           {mode === 'login' && (
             <div>
-              {/* Method Switcher: Email vs Phone */}
-              <div className="flex p-1 bg-slate-100/80 rounded-xl mb-5">
-                <button 
+              {/* Top Auth Method Selector: Gmail ID vs Contact No. OTP vs Corporate Email */}
+              <div className="grid grid-cols-3 gap-1.5 p-1.5 bg-slate-100/90 rounded-2xl mb-6">
+                <button
                   type="button"
-                  onClick={() => { setMethod('email'); setError(''); setUnregisteredEmail(null); }}
-                  className={`flex-1 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${
-                    method === 'email' ? 'bg-white text-survyx-navy shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                  onClick={() => { setAuthMethod('gmail'); setError(''); setUnregisteredEmail(null); }}
+                  className={`py-2 px-2 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                    authMethod === 'gmail'
+                      ? 'bg-white text-slate-900 shadow-md border border-slate-200/80 ring-1 ring-blue-500/20'
+                      : 'text-slate-500 hover:text-slate-900'
                   }`}
                 >
-                  Corporate Email
+                  <GoogleIcon size={14} />
+                  <span className="truncate">Gmail / Google</span>
                 </button>
-                <button 
-                  type="button"
-                  onClick={() => { setMethod('phone'); setError(''); setUnregisteredEmail(null); }}
-                  className={`flex-1 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${
-                    method === 'phone' ? 'bg-white text-survyx-navy shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  Mobile OTP
-                </button>
-              </div>
-
-              <form onSubmit={handleLoginSubmit} className="space-y-4">
-                {method === 'email' ? (
-                  <>
-                    <AuthInput 
-                      label="Professional Email" 
-                      icon={<Mail size={16} />} 
-                      placeholder="name@company.com" 
-                      type="email"
-                      value={email}
-                      onChange={(e: any) => setEmail(e.target.value)}
-                      required
-                    />
-
-                    <div>
-                      <div className="flex justify-between items-center mb-1 ml-1">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                          Access Password
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => setShowForgotPassword(true)}
-                          className="text-[10px] font-bold text-survyx-blue hover:underline"
-                        >
-                          Forgot Password?
-                        </button>
-                      </div>
-                      <div className="relative group">
-                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 group-focus-within:text-survyx-blue">
-                          <Lock size={16} />
-                        </div>
-                        <input
-                          type={showPassword ? 'text' : 'password'}
-                          placeholder="••••••••"
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          required
-                          className="block w-full pl-10 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium placeholder-slate-400 focus:ring-2 focus:ring-survyx-blue/20 focus:border-survyx-blue focus:bg-white outline-none transition-all"
-                        />
-                        <button 
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-3 text-slate-400 hover:text-slate-700"
-                        >
-                          {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                        </button>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 ml-1">
-                        Registered Business Mobile
-                      </label>
-                      <div className="flex gap-2">
-                        <div className="relative flex-1 group">
-                          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 group-focus-within:text-survyx-blue">
-                            <Smartphone size={16} />
-                          </div>
-                          <input
-                            type="tel"
-                            placeholder="+91 98200 12345"
-                            value={phone}
-                            onChange={(e) => setPhone(e.target.value)}
-                            className="block w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium placeholder-slate-400 focus:ring-2 focus:ring-survyx-blue/20 focus:border-survyx-blue focus:bg-white outline-none transition-all"
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleSendOtp}
-                          disabled={otpSent && otpTimer > 0}
-                          className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-survyx-navy text-xs font-bold rounded-xl transition-all shrink-0 active:scale-95 disabled:opacity-60"
-                        >
-                          {otpSent ? (otpTimer > 0 ? `Resend (${otpTimer}s)` : 'Resend OTP') : 'Send OTP'}
-                        </button>
-                      </div>
-                    </div>
-
-                    {otpSent && (
-                      <motion.div 
-                        initial={{ opacity: 0, y: 5 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="space-y-2"
-                      >
-                        <div className="flex justify-between items-center">
-                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
-                            Enter 6-Digit OTP
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() => setOtpValue('123456')}
-                            className="text-[9px] font-bold text-survyx-blue hover:underline bg-blue-50 px-2 py-0.5 rounded"
-                          >
-                            Auto-fill Test OTP (123456)
-                          </button>
-                        </div>
-                        <input
-                          type="text"
-                          maxLength={6}
-                          placeholder="123456"
-                          value={otpValue}
-                          onChange={(e) => setOtpValue(e.target.value)}
-                          className="block w-full text-center tracking-[0.5em] py-3 bg-slate-50 border border-slate-200 rounded-xl text-base font-mono font-bold focus:ring-2 focus:ring-survyx-blue/20 focus:border-survyx-blue focus:bg-white outline-none"
-                        />
-                      </motion.div>
-                    )}
-                  </>
-                )}
-
-                {/* Remember Me Checkbox */}
-                <div className="flex items-center justify-between pt-1">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={rememberMe}
-                      onChange={(e) => setRememberMe(e.target.checked)}
-                      className="w-4 h-4 rounded text-survyx-blue focus:ring-survyx-blue border-slate-300"
-                    />
-                    <span className="text-xs text-slate-600 font-medium">Save login & entity data on this device</span>
-                  </label>
-                </div>
-
-                {/* Error / Alert Callout */}
-                {error && (
-                  <div className="bg-rose-50 text-rose-700 p-3.5 rounded-2xl border border-rose-200 space-y-2">
-                    <div className="flex items-start gap-2 text-xs font-bold">
-                      <AlertCircle size={16} className="text-rose-600 shrink-0 mt-0.5" />
-                      <span>{error}</span>
-                    </div>
-                    {unregisteredEmail && (
-                      <div className="pt-1 flex items-center justify-end">
-                        <button
-                          type="button"
-                          onClick={() => switchToRegisterWithEmail(unregisteredEmail)}
-                          className="text-[11px] font-black uppercase tracking-wider bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-xs transition-colors"
-                        >
-                          <span>Register Entity with this Email</span>
-                          <ArrowRight size={12} />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {successMsg && (
-                  <div className="bg-emerald-50 text-emerald-700 p-3 rounded-xl flex items-center gap-2 text-xs font-bold border border-emerald-100">
-                    <CheckCircle2 size={15} className="shrink-0" />
-                    <span>{successMsg}</span>
-                  </div>
-                )}
 
                 <button
-                  type="submit"
-                  className="w-full flex items-center justify-center gap-2 py-3.5 px-4 bg-survyx-navy hover:bg-slate-900 text-white rounded-xl shadow-xl shadow-blue-900/10 transition-all font-black uppercase tracking-wider text-xs group active:scale-98"
+                  type="button"
+                  onClick={() => { setAuthMethod('phone'); setError(''); setUnregisteredEmail(null); }}
+                  className={`py-2 px-2 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                    authMethod === 'phone'
+                      ? 'bg-white text-slate-900 shadow-md border border-slate-200/80 ring-1 ring-blue-500/20'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
                 >
-                  <span>{method === 'email' ? 'Validate Access & Enter Hub' : (otpSent ? 'Verify OTP & Access Hub' : 'Send Verification OTP')}</span>
-                  <ArrowRight className="group-hover:translate-x-1 transition-transform" size={15} />
+                  <Smartphone size={14} className="text-survyx-blue" />
+                  <span className="truncate">Contact No. OTP</span>
                 </button>
-              </form>
 
-              {/* SSO Social Logins */}
-              <div className="mt-6">
-                <div className="relative mb-4">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-slate-200" />
-                  </div>
-                  <div className="relative flex justify-center text-[10px] uppercase tracking-[0.2em] font-black">
-                    <span className="bg-white px-3 text-slate-400">Institutional SSO Hub</span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <button 
-                    type="button"
-                    onClick={() => handleSocialLogin('Google')}
-                    className="flex items-center justify-center space-x-2 py-2.5 px-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-all text-xs font-bold text-slate-700 active:scale-95"
-                  >
-                    <Chrome size={15} className="text-red-500" />
-                    <span>Google Workspace</span>
-                  </button>
-                  <button 
-                    type="button"
-                    onClick={() => handleSocialLogin('LinkedIn')}
-                    className="flex items-center justify-center space-x-2 py-2.5 px-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-all text-xs font-bold text-slate-700 active:scale-95"
-                  >
-                    <Linkedin size={15} className="text-blue-600" />
-                    <span>LinkedIn SSO</span>
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => { setAuthMethod('email'); setError(''); setUnregisteredEmail(null); }}
+                  className={`py-2 px-2 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                    authMethod === 'email'
+                      ? 'bg-white text-slate-900 shadow-md border border-slate-200/80 ring-1 ring-blue-500/20'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  <Mail size={14} className="text-slate-600" />
+                  <span className="truncate">Corporate Email</span>
+                </button>
               </div>
+
+              {/* ------------------------------------------------------------- */}
+              {/* METHOD 1: GMAIL ID / GOOGLE LOGIN */}
+              {/* ------------------------------------------------------------- */}
+              {authMethod === 'gmail' && (
+                <div className="space-y-4">
+                  <div className="p-4 bg-gradient-to-br from-blue-50/80 via-white to-slate-50 rounded-2xl border border-blue-100 shadow-xs">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 rounded-2xl bg-white shadow-md border border-slate-200 flex items-center justify-center shrink-0">
+                        <GoogleIcon size={22} />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                          Google / Gmail ID Single Sign-On
+                        </h4>
+                        <p className="text-[11px] text-slate-500">
+                          One-tap authenticated institutional access via Google Identity Protocol.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Primary Google Login Button */}
+                    <button
+                      type="button"
+                      disabled={isGoogleSigningIn}
+                      onClick={() => setShowGoogleAccountModal(true)}
+                      className="w-full flex items-center justify-center gap-3 py-3.5 px-4 bg-white hover:bg-slate-50 text-slate-800 border-2 border-slate-200 hover:border-slate-300 rounded-xl shadow-md font-bold text-xs uppercase tracking-wider transition-all group active:scale-98"
+                    >
+                      <GoogleIcon size={18} />
+                      <span>{isGoogleSigningIn ? 'Verifying with Google...' : 'Sign in with Google / Gmail ID'}</span>
+                    </button>
+                  </div>
+
+                  {/* Fast 1-Click Saved Google / Gmail Profiles */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between ml-1">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                        <Sparkles size={11} className="text-amber-500" />
+                        Quick Select Gmail Account:
+                      </span>
+                      <span className="text-[9px] font-bold text-survyx-blue">Instant Clearance</span>
+                    </div>
+
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => handleGmailSignIn('abhishek.raghuvanshi@gmail.com', 'Abhishek Raghuvanshi', 'KUMAR INDUSTRIAL SOLUTIONS PVT LTD')}
+                        className="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-blue-50/80 border border-slate-200/80 hover:border-blue-300 rounded-xl transition-all text-left group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-blue-600 text-white font-black text-xs flex items-center justify-center shrink-0">
+                            AR
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-slate-900 group-hover:text-survyx-navy">
+                              Abhishek Raghuvanshi
+                            </p>
+                            <p className="text-[10px] text-slate-500 font-mono">
+                              abhishek.raghuvanshi@gmail.com
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-[9px] font-black text-survyx-blue uppercase tracking-wider bg-white px-2 py-1 rounded-lg border border-blue-100 group-hover:bg-survyx-blue group-hover:text-white transition-colors">
+                          Select →
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleGmailSignIn('rajesh.sharma.b2b@gmail.com', 'Rajesh Sharma', 'SOLARGRID HIGH-TECH COMPONENTS LTD')}
+                        className="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-blue-50/80 border border-slate-200/80 hover:border-blue-300 rounded-xl transition-all text-left group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-emerald-600 text-white font-black text-xs flex items-center justify-center shrink-0">
+                            RS
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-slate-900 group-hover:text-survyx-navy">
+                              Rajesh Sharma (Supplier)
+                            </p>
+                            <p className="text-[10px] text-slate-500 font-mono">
+                              rajesh.sharma.b2b@gmail.com
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-[9px] font-black text-survyx-blue uppercase tracking-wider bg-white px-2 py-1 rounded-lg border border-blue-100 group-hover:bg-survyx-blue group-hover:text-white transition-colors">
+                          Select →
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Custom Gmail ID Manual Input */}
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowGoogleAccountModal(true)}
+                      className="w-full py-2.5 text-center text-xs font-bold text-slate-600 hover:text-survyx-blue hover:underline bg-slate-100/60 rounded-xl transition-colors"
+                    >
+                      + Use another Gmail address / Custom Google Workspace ID
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ------------------------------------------------------------- */}
+              {/* METHOD 2: CONTACT NO. THROUGH OTP VERIFICATION */}
+              {/* ------------------------------------------------------------- */}
+              {authMethod === 'phone' && (
+                <form onSubmit={handleVerifyPhoneOtpLogin} className="space-y-4">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">
+                      Business Contact Number
+                    </label>
+                    <div className="flex gap-2">
+                      {/* Country Code Dropdown */}
+                      <select
+                        value={countryCode}
+                        onChange={(e) => setCountryCode(e.target.value)}
+                        className="py-3 px-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-survyx-blue/20 focus:border-survyx-blue outline-none shrink-0"
+                      >
+                        {COUNTRY_CODES.map((c) => (
+                          <option key={c.code} value={c.code}>
+                            {c.flag} {c.code}
+                          </option>
+                        ))}
+                      </select>
+
+                      {/* Phone Input */}
+                      <div className="relative flex-1 group">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 group-focus-within:text-survyx-blue">
+                          <Smartphone size={16} />
+                        </div>
+                        <input
+                          type="tel"
+                          placeholder="98200 12345"
+                          value={phone}
+                          onChange={(e) => {
+                            setPhone(e.target.value);
+                            setOtpSent(false);
+                          }}
+                          required
+                          className="block w-full pl-9 pr-3 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-survyx-blue/20 focus:border-survyx-blue focus:bg-white outline-none transition-all"
+                        />
+                      </div>
+
+                      {/* Send / Resend OTP Button */}
+                      <button
+                        type="button"
+                        onClick={handleSendPhoneOtp}
+                        disabled={isSendingOtp || (otpSent && otpTimer > 0)}
+                        className="px-4 py-3 bg-survyx-navy hover:bg-slate-900 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shrink-0 active:scale-95 disabled:opacity-60 shadow-sm"
+                      >
+                        {isSendingOtp 
+                          ? 'Sending...' 
+                          : (otpSent ? (otpTimer > 0 ? `Resend (${otpTimer}s)` : 'Resend OTP') : 'Send OTP')}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 6-Digit OTP Verification Box */}
+                  {otpSent && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="p-4 bg-blue-50/60 rounded-2xl border border-blue-100 space-y-3"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
+                          <MessageSquare size={14} className="text-survyx-blue" />
+                          <span>Enter 6-Digit SMS Verification OTP:</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleAutoFillOtp(generatedOtp)}
+                          className="text-[10px] font-black uppercase tracking-wider text-survyx-blue bg-white hover:bg-blue-50 px-2 py-1 rounded-lg border border-blue-200 shadow-2xs transition-colors"
+                        >
+                          Auto-fill ({generatedOtp})
+                        </button>
+                      </div>
+
+                      {/* 6 Segmented Digit Boxes */}
+                      <div className="flex justify-between gap-1.5 sm:gap-2">
+                        {otpDigits.map((digit, idx) => (
+                          <input
+                            key={idx}
+                            ref={(el) => (otpInputRefs.current[idx] = el)}
+                            type="text"
+                            inputMode="numeric"
+                            maxLength={1}
+                            value={digit}
+                            onChange={(e) => handleOtpDigitChange(idx, e.target.value)}
+                            onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                            className="w-11 h-12 text-center text-lg font-mono font-black bg-white border-2 border-slate-200 focus:border-survyx-blue focus:ring-2 focus:ring-survyx-blue/20 rounded-xl outline-none shadow-xs text-slate-900"
+                          />
+                        ))}
+                      </div>
+
+                      <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1">
+                        <span className="flex items-center gap-1">
+                          <Clock size={12} className="text-slate-400" />
+                          OTP expires in 10 minutes
+                        </span>
+                        {otpTimer > 0 ? (
+                          <span className="text-blue-600 font-bold">Resend available in {otpTimer}s</span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={handleSendPhoneOtp}
+                            className="text-survyx-blue font-bold hover:underline"
+                          >
+                            Resend SMS OTP
+                          </button>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* Quick Preset Phone Numbers for Testing */}
+                  <div className="bg-slate-50 rounded-xl p-3 border border-slate-200/70">
+                    <span className="text-[9.5px] font-black uppercase tracking-wider text-slate-500 block mb-2">
+                      Test with Demo Enterprise Numbers:
+                    </span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPhone('98200 12345');
+                          setOtpSent(false);
+                        }}
+                        className="text-left p-1.5 bg-white border border-slate-200 rounded-lg text-[10px] hover:border-blue-400 transition-colors"
+                      >
+                        <p className="font-bold text-slate-800">+91 98200 12345</p>
+                        <p className="text-[9px] text-slate-500">Abhishek (Buyer)</p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPhone('98111 54321');
+                          setOtpSent(false);
+                        }}
+                        className="text-left p-1.5 bg-white border border-slate-200 rounded-lg text-[10px] hover:border-blue-400 transition-colors"
+                      >
+                        <p className="font-bold text-slate-800">+91 98111 54321</p>
+                        <p className="text-[9px] text-slate-500">Rajesh (Supplier)</p>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Verify & Access Button */}
+                  <button
+                    type="submit"
+                    className="w-full flex items-center justify-center gap-2 py-3.5 px-4 bg-survyx-navy hover:bg-slate-900 text-white rounded-xl shadow-xl shadow-blue-900/10 transition-all font-black uppercase tracking-wider text-xs group active:scale-98"
+                  >
+                    <span>{otpSent ? 'Verify OTP & Enter Marketplace' : 'Send SMS Verification OTP'}</span>
+                    <ArrowRight className="group-hover:translate-x-1 transition-transform" size={15} />
+                  </button>
+                </form>
+              )}
+
+              {/* ------------------------------------------------------------- */}
+              {/* METHOD 3: TRADITIONAL CORPORATE EMAIL & PASSWORD */}
+              {/* ------------------------------------------------------------- */}
+              {authMethod === 'email' && (
+                <form onSubmit={handleEmailLoginSubmit} className="space-y-4">
+                  <AuthInput 
+                    label="Professional Email" 
+                    icon={<Mail size={16} />} 
+                    placeholder="name@company.com" 
+                    type="email"
+                    value={email}
+                    onChange={(e: any) => setEmail(e.target.value)}
+                    required
+                  />
+
+                  <div>
+                    <div className="flex justify-between items-center mb-1 ml-1">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                        Access Password
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setShowForgotPassword(true)}
+                        className="text-[10px] font-bold text-survyx-blue hover:underline"
+                      >
+                        Forgot Password?
+                      </button>
+                    </div>
+                    <div className="relative group">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 group-focus-within:text-survyx-blue">
+                        <Lock size={16} />
+                      </div>
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        className="block w-full pl-10 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium placeholder-slate-400 focus:ring-2 focus:ring-survyx-blue/20 focus:border-survyx-blue focus:bg-white outline-none transition-all"
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-3 text-slate-400 hover:text-slate-700"
+                      >
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Remember Me Checkbox */}
+                  <div className="flex items-center justify-between pt-1">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={rememberMe}
+                        onChange={(e) => setRememberMe(e.target.checked)}
+                        className="w-4 h-4 rounded text-survyx-blue focus:ring-survyx-blue border-slate-300"
+                      />
+                      <span className="text-xs text-slate-600 font-medium">Save login credentials on this workstation</span>
+                    </label>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full flex items-center justify-center gap-2 py-3.5 px-4 bg-survyx-navy hover:bg-slate-900 text-white rounded-xl shadow-xl shadow-blue-900/10 transition-all font-black uppercase tracking-wider text-xs group active:scale-98"
+                  >
+                    <span>Validate Credentials & Enter Hub</span>
+                    <ArrowRight className="group-hover:translate-x-1 transition-transform" size={15} />
+                  </button>
+                </form>
+              )}
+
+              {/* Error Callout */}
+              {error && (
+                <div className="mt-4 bg-rose-50 text-rose-700 p-3.5 rounded-2xl border border-rose-200 space-y-2">
+                  <div className="flex items-start gap-2 text-xs font-bold">
+                    <AlertCircle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                    <span>{error}</span>
+                  </div>
+                  {unregisteredEmail && (
+                    <div className="pt-1 flex items-center justify-end">
+                      <button
+                        type="button"
+                        onClick={() => switchToRegisterWithEmail(unregisteredEmail)}
+                        className="text-[11px] font-black uppercase tracking-wider bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-xs transition-colors"
+                      >
+                        <span>Register Entity with this Email</span>
+                        <ArrowRight size={12} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {successMsg && (
+                <div className="mt-4 bg-emerald-50 text-emerald-700 p-3 rounded-xl flex items-center gap-2 text-xs font-bold border border-emerald-100">
+                  <CheckCircle2 size={15} className="shrink-0" />
+                  <span>{successMsg}</span>
+                </div>
+              )}
             </div>
           )}
 
-          {/* REGISTRATION FORM */}
+          {/* ------------------------------------------------------------- */}
+          {/* REGISTRATION FORM (WITH PHONE OTP VERIFICATION) */}
+          {/* ------------------------------------------------------------- */}
           {mode === 'register' && (
             <form onSubmit={handleRegisterSubmit} className="space-y-4">
               <div className="flex p-1 bg-slate-100 rounded-xl mb-4">
@@ -690,25 +1147,117 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
                 </select>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Official Email / Gmail */}
+              <div>
                 <AuthInput 
-                  label="Official Corporate Email" 
+                  label="Corporate Email or Gmail ID" 
                   icon={<Mail size={16} />} 
-                  placeholder="name@company.com" 
+                  placeholder="name@company.com or user@gmail.com" 
                   type="email"
                   value={regEmail}
                   onChange={(e: any) => setRegEmail(e.target.value)}
                   required
                 />
-                <AuthInput 
-                  label="Direct Phone Number" 
-                  icon={<Phone size={16} />} 
-                  placeholder="+91 98200 XXXXX" 
-                  type="tel"
-                  value={regPhone}
-                  onChange={(e: any) => setRegPhone(e.target.value)}
-                  required
-                />
+              </div>
+
+              {/* Direct Phone Number with Live OTP Verification */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between ml-1">
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                    Direct Contact Number <span className="text-red-500">*</span>
+                  </label>
+                  {regPhoneVerified && (
+                    <span className="text-[10px] font-black text-emerald-600 flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      <CheckCircle size={12} />
+                      Phone Verified via OTP
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex gap-2">
+                  <select
+                    value={regCountryCode}
+                    onChange={(e) => setRegCountryCode(e.target.value)}
+                    className="py-3 px-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none shrink-0"
+                  >
+                    {COUNTRY_CODES.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.flag} {c.code}
+                      </option>
+                    ))}
+                  </select>
+
+                  <div className="relative flex-1 group">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 group-focus-within:text-survyx-blue">
+                      <Phone size={16} />
+                    </div>
+                    <input
+                      type="tel"
+                      placeholder="98200 12345"
+                      value={regPhone}
+                      onChange={(e) => {
+                        setRegPhone(e.target.value);
+                        setRegPhoneVerified(false);
+                      }}
+                      required
+                      className="block w-full pl-9 pr-3 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-survyx-blue/20 focus:border-survyx-blue focus:bg-white outline-none transition-all"
+                    />
+                  </div>
+
+                  {!regPhoneVerified && (
+                    <button
+                      type="button"
+                      onClick={handleSendRegPhoneOtp}
+                      className="px-3.5 py-3 bg-blue-50 hover:bg-blue-100 text-survyx-blue border border-blue-200 text-xs font-black uppercase tracking-wider rounded-xl transition-all shrink-0 active:scale-95"
+                    >
+                      {regPhoneOtpSent ? 'Resend' : 'Verify via OTP'}
+                    </button>
+                  )}
+                </div>
+
+                {/* Inline OTP entry for registration */}
+                {regPhoneOtpSent && !regPhoneVerified && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="p-3 bg-blue-50/60 rounded-xl border border-blue-200 space-y-2"
+                  >
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-slate-800 text-[11px]">Enter SMS OTP:</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRegPhoneOtpDigits(regGeneratedOtp.split(''));
+                        }}
+                        className="text-[9px] font-black text-survyx-blue bg-white px-2 py-0.5 rounded border border-blue-200"
+                      >
+                        Auto-fill ({regGeneratedOtp})
+                      </button>
+                    </div>
+
+                    <div className="flex gap-1.5 justify-between">
+                      {regPhoneOtpDigits.map((digit, idx) => (
+                        <input
+                          key={idx}
+                          ref={(el) => (regOtpInputRefs.current[idx] = el)}
+                          type="text"
+                          maxLength={1}
+                          inputMode="numeric"
+                          value={digit}
+                          onChange={(e) => handleRegOtpDigitChange(idx, e.target.value)}
+                          className="w-9 h-10 text-center text-base font-mono font-bold bg-white border border-slate-300 focus:border-survyx-blue rounded-lg outline-none"
+                        />
+                      ))}
+                      <button
+                        type="button"
+                        onClick={handleVerifyRegPhoneOtp}
+                        className="px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-wider rounded-lg shrink-0 shadow-xs"
+                      >
+                        Confirm
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -809,7 +1358,7 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
                   </div>
                   <div className="truncate text-left">
                     <p className="text-[11px] font-bold text-slate-800 truncate">{acc.businessName}</p>
-                    <p className="text-[9px] text-slate-500 font-mono truncate">{acc.email} • {acc.euid}</p>
+                    <p className="text-[9px] text-slate-500 font-mono truncate">{acc.email} • {acc.phone}</p>
                   </div>
                 </div>
                 <button
@@ -827,11 +1376,135 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
         {/* Saved Session Info Bar */}
         <div className="mt-4 flex items-center justify-between text-slate-500 text-[10px] px-2 font-mono">
           <span>SURVYX Multi-Sig Registry ID Auth</span>
-          <span>Encrypted Session Storage Active</span>
+          <span>Google SSO & SMS OTP Gateway</span>
         </div>
       </div>
 
-      {/* Registration Success Modal */}
+      {/* ------------------------------------------------------------- */}
+      {/* GOOGLE / GMAIL ACCOUNT SELECTOR MODAL */}
+      {/* ------------------------------------------------------------- */}
+      <AnimatePresence>
+        {showGoogleAccountModal && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl border border-slate-200 relative overflow-hidden"
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
+                <div className="flex items-center gap-2.5">
+                  <GoogleIcon size={24} />
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900">Sign in with Google</h3>
+                    <p className="text-[11px] text-slate-500">to continue to SURVYX Marketplace</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowGoogleAccountModal(false)}
+                  className="text-slate-400 hover:text-slate-700 text-sm font-bold p-1 rounded-lg"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Account List */}
+              <div className="space-y-2 mb-4">
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 ml-1">
+                  Choose an account:
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => handleGmailSignIn('abhishek.raghuvanshi@survyx.com', 'Abhishek Raghuvanshi', 'KUMAR INDUSTRIAL SOLUTIONS PVT LTD')}
+                  className="w-full flex items-center gap-3 p-3 rounded-2xl border border-slate-200 hover:bg-blue-50/70 hover:border-blue-300 transition-all text-left group"
+                >
+                  <div className="w-10 h-10 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-sm shadow-xs">
+                    AR
+                  </div>
+                  <div className="truncate">
+                    <p className="text-xs font-bold text-slate-900 group-hover:text-survyx-navy">Abhishek Raghuvanshi</p>
+                    <p className="text-[11px] text-slate-500 font-mono">abhishek.raghuvanshi@survyx.com</p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleGmailSignIn('abhishek.raghuvanshi@gmail.com', 'Abhishek Raghuvanshi', 'KUMAR INDUSTRIAL SOLUTIONS PVT LTD')}
+                  className="w-full flex items-center gap-3 p-3 rounded-2xl border border-slate-200 hover:bg-blue-50/70 hover:border-blue-300 transition-all text-left group"
+                >
+                  <div className="w-10 h-10 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-sm shadow-xs">
+                    AR
+                  </div>
+                  <div className="truncate">
+                    <p className="text-xs font-bold text-slate-900 group-hover:text-survyx-navy">Abhishek (Personal Gmail)</p>
+                    <p className="text-[11px] text-slate-500 font-mono">abhishek.raghuvanshi@gmail.com</p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleGmailSignIn('rajesh.sharma.b2b@gmail.com', 'Rajesh Sharma', 'SOLARGRID HIGH-TECH COMPONENTS LTD')}
+                  className="w-full flex items-center gap-3 p-3 rounded-2xl border border-slate-200 hover:bg-blue-50/70 hover:border-blue-300 transition-all text-left group"
+                >
+                  <div className="w-10 h-10 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-sm shadow-xs">
+                    RS
+                  </div>
+                  <div className="truncate">
+                    <p className="text-xs font-bold text-slate-900 group-hover:text-survyx-navy">Rajesh Sharma</p>
+                    <p className="text-[11px] text-slate-500 font-mono">rajesh.sharma.b2b@gmail.com</p>
+                  </div>
+                </button>
+              </div>
+
+              {/* Custom Gmail Form */}
+              <div className="border-t border-slate-100 pt-3">
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2 ml-1">
+                  Or enter any Gmail address:
+                </p>
+                <form onSubmit={handleCustomGoogleSubmit} className="space-y-2.5">
+                  <input
+                    type="email"
+                    placeholder="your.name@gmail.com"
+                    value={googleCustomEmail}
+                    onChange={(e) => setGoogleCustomEmail(e.target.value)}
+                    className="block w-full py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                    required
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      placeholder="Your Full Name (Optional)"
+                      value={googleCustomName}
+                      onChange={(e) => setGoogleCustomName(e.target.value)}
+                      className="block w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-[11px] focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Company Name (Optional)"
+                      value={googleCustomCompany}
+                      onChange={(e) => setGoogleCustomCompany(e.target.value)}
+                      className="block w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-[11px] focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full py-3 bg-survyx-navy hover:bg-slate-900 text-white rounded-xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-colors shadow-sm"
+                  >
+                    <span>Authenticate with this Google ID</span>
+                    <ArrowRight size={14} />
+                  </button>
+                </form>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ------------------------------------------------------------- */}
+      {/* REGISTRATION SUCCESS MODAL */}
+      {/* ------------------------------------------------------------- */}
       <AnimatePresence>
         {showSuccessModal && registeredAccount && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
@@ -852,7 +1525,7 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
                   Entity Successfully Registered & Authenticated!
                 </h3>
                 <p className="text-xs text-slate-500 mt-1">
-                  Your business credentials and verification profile are saved to the encrypted registry database.
+                  Your business credentials and verified phone number are saved to the encrypted registry database.
                 </p>
 
                 {/* Generated Identity Clearance Card */}
@@ -876,8 +1549,8 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
                       <p className="font-bold text-slate-800 text-[11px] truncate">{registeredAccount.name}</p>
                     </div>
                     <div>
-                      <span className="text-[10px] text-slate-400 font-bold uppercase">Corporate Email</span>
-                      <p className="font-mono text-slate-700 text-[10px] truncate">{registeredAccount.email}</p>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase">Contact Phone</span>
+                      <p className="font-mono text-emerald-700 font-bold text-[10px] truncate">{registeredAccount.phone}</p>
                     </div>
                     <div>
                       <span className="text-[10px] text-slate-400 font-bold uppercase">Trust Score</span>
@@ -891,24 +1564,11 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
                     type="button"
                     onClick={() => {
                       setShowSuccessModal(false);
-                      // User is already authenticated and session is active in context
                     }}
                     className="flex-1 py-3.5 px-4 bg-survyx-navy hover:bg-survyx-blue text-white rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-blue-900/10 transition-colors"
                   >
                     <span>Enter Marketplace Hub Now</span>
                     <ArrowRight size={15} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowSuccessModal(false);
-                      setMode('login');
-                      setEmail(registeredAccount.email);
-                      setPassword(registeredAccount.password || '');
-                    }}
-                    className="py-3.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs uppercase tracking-wider transition-colors"
-                  >
-                    <span>Test Sign In</span>
                   </button>
                 </div>
               </div>
@@ -917,7 +1577,9 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
         )}
       </AnimatePresence>
 
-      {/* Forgot Password Modal */}
+      {/* ------------------------------------------------------------- */}
+      {/* FORGOT PASSWORD MODAL */}
+      {/* ------------------------------------------------------------- */}
       <AnimatePresence>
         {showForgotPassword && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -940,10 +1602,10 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
               {!resetSent ? (
                 <div className="space-y-4">
                   <p className="text-xs text-slate-600 leading-relaxed">
-                    Enter your registered corporate email. Officer Priya will issue an instant statutory OTP link to reset your credentials.
+                    Enter your registered corporate email or Gmail ID. Officer Priya will issue an instant statutory OTP link to reset your credentials.
                   </p>
                   <AuthInput
-                    label="Corporate Email"
+                    label="Corporate Email or Gmail ID"
                     placeholder="name@company.com"
                     type="email"
                     value={resetEmail}

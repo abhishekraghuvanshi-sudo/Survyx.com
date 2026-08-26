@@ -22,6 +22,7 @@ import {
   Award
 } from 'lucide-react';
 import { useUserJourney } from '../context/UserJourneyContext';
+import TradeAnalyticsChart from '../components/TradeAnalyticsChart';
 
 interface DashboardProps {
   setView?: (v: any) => void;
@@ -262,6 +263,9 @@ export default function Dashboard({}: DashboardProps) {
           </>
         )}
       </div>
+
+      {/* 30-DAY B2B TRADE VOLUMES & MILESTONE COMPLETION VELOCITY (RECHARTS) */}
+      <TradeAnalyticsChart />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Main Hub Area */}

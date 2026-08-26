@@ -62,7 +62,7 @@ export default function Landing({
       <nav className="glass sticky top-0 z-40 px-6 py-4 border-b border-slate-200/60 backdrop-blur-xl bg-white/80">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="flex items-center space-x-3 group cursor-pointer" onClick={onGetStarted}>
-            <SurvyxLogo size="md" variant="dark" subtitle="People • Process • Technology" />
+            <SurvyxLogo size="md" variant="dark" subtitle="India's Sovereign B2B Marketplace & Escrow Protocol" />
           </div>
 
           <div className="hidden md:flex items-center space-x-8 text-[11px] font-bold uppercase tracking-wider text-slate-600">
@@ -120,17 +120,17 @@ export default function Landing({
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-blue-50 text-survyx-blue rounded-full border border-blue-200/60 mb-6 shadow-sm">
                 <Sparkles size={13} className="text-survyx-blue" />
                 <span className="text-[10px] font-black uppercase tracking-widest">
-                  Global Marketplace to Connect, Consult, Buy, Sell & Grow
+                  India’s Sovereign B2B Marketplace & Milestone Escrow Protocol
                 </span>
               </div>
               
               <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black text-survyx-navy leading-[0.95] tracking-tighter mb-6">
-                Connect. Consult.<br />
-                <span className="text-survyx-blue italic">Buy. Sell. Grow.</span>
+                Trade with Absolute Certainty.<br />
+                <span className="text-survyx-blue italic">Buy, Sell & Settle in Escrow.</span>
               </h1>
               
               <p className="text-lg sm:text-xl text-slate-600 mb-10 font-normal leading-relaxed max-w-2xl mx-auto">
-                SURVYX is the governed institutional B2B marketplace powering seamless global trade through synchronized <span className="text-survyx-navy font-bold">People, Process, and Technology</span>.
+                SURVYX powers zero-default industrial commerce across India by unifying <span className="text-survyx-navy font-bold">Sovereign EUID Verification</span>, <span className="text-survyx-navy font-bold">3-Tier Milestone Escrow Vaults</span>, and <span className="text-survyx-navy font-bold">Statutory AI Governance</span>.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
