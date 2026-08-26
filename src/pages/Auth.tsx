@@ -23,18 +23,23 @@ import {
   Shield, 
   Globe2,
   Check,
-  Smartphone
+  Smartphone,
+  BadgeCheck,
+  Award,
+  Hash,
+  ExternalLink
 } from 'lucide-react';
 import { useUserJourney } from '../context/UserJourneyContext';
 import { UserAccount, getRememberedCredentials, setRememberedCredentials, DEFAULT_ACCOUNTS } from '../lib/authStorage';
+import SurvyxLogo from '../components/SurvyxLogo';
 
 interface AuthProps {
-  onLogin: (email: string, passwordOrName?: string, customData?: Partial<UserAccount>) => void;
+  onLogin: (email: string, passwordOrName?: string, customData?: Partial<UserAccount>) => { success?: boolean; error?: string; account?: UserAccount; requiresRegistration?: boolean } | void;
   onBack: () => void;
 }
 
 export default function Auth({ onLogin, onBack }: AuthProps) {
-  const { registerUser, registeredAccounts, switchAccount } = useUserJourney();
+  const { registerUser, registeredAccounts, loginUser } = useUserJourney();
 
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [method, setMethod] = useState<'email' | 'phone'>('email');
@@ -49,6 +54,7 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
+  const [unregisteredEmail, setUnregisteredEmail] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState('');
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
@@ -65,6 +71,12 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
   const [regPassword, setRegPassword] = useState('');
   const [regConfirmPassword, setRegConfirmPassword] = useState('');
   const [regRole, setRegRole] = useState<'buyer' | 'supplier'>('buyer');
+  const [showRegPassword, setShowRegPassword] = useState(false);
+  const [agreedTerms, setAgreedTerms] = useState(true);
+
+  // Registration Success Modal State
+  const [registeredAccount, setRegisteredAccount] = useState<UserAccount | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   // Load remembered credentials on mount
   useEffect(() => {
@@ -76,7 +88,7 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
       }
       setRememberMe(true);
     } else {
-      // Default to primary enterprise email
+      // Default initial placeholder
       setEmail('abhishek.raghuvanshi@survyx.com');
       setPassword('password123');
     }
@@ -108,9 +120,11 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setUnregisteredEmail(null);
 
     if (method === 'email') {
-      if (!email.trim()) {
+      const cleanEmail = email.trim().toLowerCase();
+      if (!cleanEmail) {
         setError('Please provide your professional email address.');
         return;
       }
@@ -119,18 +133,28 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
         return;
       }
 
-      // Save remembered credentials if checked
-      setRememberedCredentials({
-        email: email.trim(),
-        password: rememberMe ? password : '',
-        remember: rememberMe
-      });
+      // Check against registered accounts via context loginUser
+      const res = loginUser(cleanEmail, password, { rememberMe });
+      if (res && !res.success) {
+        setError(res.error || 'Authentication failed. Please verify credentials or register.');
+        if (res.requiresRegistration) {
+          setUnregisteredEmail(cleanEmail);
+        }
+        return;
+      }
 
-      // Call onLogin
-      onLogin(email.trim(), password, { rememberMe });
+      // Save remembered credentials if checked
+      if (rememberMe) {
+        setRememberedCredentials({
+          email: cleanEmail,
+          password: password,
+          remember: true
+        });
+      }
     } else {
       // Phone method
-      if (!phone.trim()) {
+      const cleanPhone = phone.trim();
+      if (!cleanPhone) {
         setError('Please provide your registered mobile number.');
         return;
       }
@@ -139,11 +163,15 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
         return;
       }
       if (otpValue !== '123456' && otpValue.length < 4) {
-        setError('Invalid OTP. Use test OTP: 123456');
+        setError('Invalid OTP. Use statutory test OTP: 123456');
         return;
       }
 
-      onLogin(phone.trim(), 'Mobile Sign In', { phone: phone.trim(), rememberMe });
+      const res = loginUser(cleanPhone, 'Mobile Sign In', { phone: cleanPhone, rememberMe });
+      if (res && !res.success) {
+        setError(res.error || 'Mobile number is not registered. Please register your entity first.');
+        return;
+      }
     }
   };
 
@@ -172,15 +200,23 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
       return;
     }
     if (regPassword !== regConfirmPassword) {
-      setError('Passwords do not match.');
+      setError('Passwords do not match. Please verify confirmation password.');
+      return;
+    }
+    if (!agreedTerms) {
+      setError('Please accept the SURVYX Institutional Governance & Escrow Covenants.');
       return;
     }
 
     // Register user through context
+    const cleanGstin = regGstin.trim().toUpperCase() || '27AABCU9603R1ZM';
+    const pan = cleanGstin.length >= 12 ? cleanGstin.substring(2, 12) : 'AABCU9603R';
+
     const res = registerUser({
       name: regName.trim(),
       businessName: regBusinessName.trim().toUpperCase(),
-      gstin: regGstin.trim().toUpperCase() || '27AABCU9603R1ZM',
+      gstin: cleanGstin,
+      pan: pan,
       state: regState,
       industryCategory: regIndustry,
       email: regEmail.trim().toLowerCase(),
@@ -196,7 +232,13 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
         password: regPassword,
         remember: true
       });
-      setSuccessMsg(`Welcome ${res.account.name}! Entity data saved to encrypted registry.`);
+      setRegisteredAccount(res.account);
+      setShowSuccessModal(true);
+    } else {
+      setError(res.message || 'Registration could not be completed.');
+      if (res.alreadyExists) {
+        setEmail(regEmail.trim().toLowerCase());
+      }
     }
   };
 
@@ -208,7 +250,7 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
       password: account.password || 'password123',
       remember: true
     });
-    onLogin(account.email, account.password || 'password123', account);
+    loginUser(account.email, account.password || 'password123', account);
   };
 
   const handleSocialLogin = (provider: 'Google' | 'LinkedIn') => {
@@ -216,12 +258,19 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
       ? 'abhishek.raghuvanshi@survyx.com' 
       : 'abhishek.linkedin@survyx.com';
 
-    onLogin(defaultEmail, `${provider} SSO User`, {
+    loginUser(defaultEmail, `${provider} SSO User`, {
       name: 'Abhishek Raghuvanshi',
       businessName: 'KUMAR INDUSTRIAL SOLUTIONS PVT LTD',
       industryCategory: 'Renewable Energy Infrastructure',
       role: 'buyer'
     });
+  };
+
+  const switchToRegisterWithEmail = (prefillEmail: string) => {
+    setRegEmail(prefillEmail);
+    setMode('register');
+    setError('');
+    setUnregisteredEmail(null);
   };
 
   return (
@@ -235,22 +284,19 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
       <div className="absolute top-6 left-6 z-20">
         <button 
           onClick={onBack}
-          className="flex items-center gap-2 bg-white/80 hover:bg-white text-slate-600 hover:text-survyx-navy px-4 py-2 rounded-xl border border-slate-200 shadow-sm transition-all font-bold text-xs uppercase tracking-widest backdrop-blur-sm active:scale-95"
+          className="flex items-center gap-2 bg-white/90 hover:bg-white text-slate-600 hover:text-survyx-navy px-4 py-2 rounded-xl border border-slate-200 shadow-sm transition-all font-bold text-xs uppercase tracking-widest backdrop-blur-sm active:scale-95"
         >
           <ChevronLeft size={16} />
           <span>Marketplace Home</span>
         </button>
       </div>
 
-      <div className="sm:mx-auto sm:w-full sm:max-w-xl text-center relative z-10">
-        <div className="mx-auto w-14 h-14 bg-survyx-navy rounded-2xl flex items-center justify-center font-black text-white shadow-xl mb-4 border border-white/20 text-2xl">
-          S
+      <div className="sm:mx-auto sm:w-full sm:max-w-xl text-center relative z-10 flex flex-col items-center">
+        <div className="mb-3">
+          <SurvyxLogo size="lg" variant="dark" subtitle="People • Process • Technology" />
         </div>
-        <h2 className="text-3xl sm:text-4xl font-black text-survyx-navy tracking-tight">
-          SURVYX<span className="text-survyx-blue">.com</span>
-        </h2>
         <p className="mt-1 text-xs text-slate-500 font-bold uppercase tracking-[0.2em]">
-          {mode === 'login' ? 'Institutional Access & Saved Registry Portal' : 'Register New Enterprise Entity'}
+          {mode === 'login' ? 'Institutional Access & Saved Registry Authentication' : 'Register New Enterprise Entity'}
         </p>
       </div>
 
@@ -265,15 +311,15 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
               <ShieldCheck size={16} className="text-emerald-500 shrink-0" />
               <span className="font-bold text-[11px]">256-Bit Encrypted Registry Storage Active</span>
             </div>
-            <span className="text-[10px] font-mono text-slate-400 bg-white px-2 py-0.5 rounded border border-slate-200">
-              Protocol v4.2
+            <span className="text-[10px] font-mono text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+              {registeredAccounts.length} Verified Entities
             </span>
           </div>
 
           {/* Mode Switcher: Sign In vs Register */}
           <div className="flex p-1.5 bg-slate-100 rounded-2xl mb-6">
             <button 
-              onClick={() => { setMode('login'); setError(''); setSuccessMsg(''); }}
+              onClick={() => { setMode('login'); setError(''); setSuccessMsg(''); setUnregisteredEmail(null); }}
               className={`flex-1 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-2 ${
                 mode === 'login' 
                   ? 'bg-survyx-navy text-white shadow-md' 
@@ -284,7 +330,7 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
               <span>Sign In</span>
             </button>
             <button 
-              onClick={() => { setMode('register'); setError(''); setSuccessMsg(''); }}
+              onClick={() => { setMode('register'); setError(''); setSuccessMsg(''); setUnregisteredEmail(null); }}
               className={`flex-1 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-2 ${
                 mode === 'register' 
                   ? 'bg-survyx-navy text-white shadow-md' 
@@ -296,18 +342,18 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
             </button>
           </div>
 
-          {/* Quick Demo 1-Click Accounts Bar */}
+          {/* Quick Demo 1-Click Pre-authenticated Accounts Bar */}
           {mode === 'login' && (
             <div className="mb-6 bg-blue-50/60 border border-blue-100 rounded-2xl p-3.5">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[10px] font-black uppercase tracking-wider text-survyx-navy flex items-center gap-1.5">
                   <Sparkles size={12} className="text-survyx-blue" />
-                  Quick 1-Click Verified Logins:
+                  Pre-Registered Institutional Accounts:
                 </span>
-                <span className="text-[9px] font-bold text-blue-600">Pre-authenticated</span>
+                <span className="text-[9px] font-bold text-blue-600">1-Click Fast Auth</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                {DEFAULT_ACCOUNTS.map((acc) => (
+                {registeredAccounts.slice(0, 3).map((acc) => (
                   <button
                     key={acc.id}
                     type="button"
@@ -338,7 +384,7 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
               <div className="flex p-1 bg-slate-100/80 rounded-xl mb-5">
                 <button 
                   type="button"
-                  onClick={() => { setMethod('email'); setError(''); }}
+                  onClick={() => { setMethod('email'); setError(''); setUnregisteredEmail(null); }}
                   className={`flex-1 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${
                     method === 'email' ? 'bg-white text-survyx-navy shadow-sm' : 'text-slate-500 hover:text-slate-800'
                   }`}
@@ -347,7 +393,7 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
                 </button>
                 <button 
                   type="button"
-                  onClick={() => { setMethod('phone'); setError(''); }}
+                  onClick={() => { setMethod('phone'); setError(''); setUnregisteredEmail(null); }}
                   className={`flex-1 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${
                     method === 'phone' ? 'bg-white text-survyx-navy shadow-sm' : 'text-slate-500 hover:text-slate-800'
                   }`}
@@ -478,13 +524,28 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
                   </label>
                 </div>
 
-                {/* Error / Success messages */}
+                {/* Error / Alert Callout */}
                 {error && (
-                  <div className="bg-red-50 text-red-600 p-3 rounded-xl flex items-center gap-2 text-xs font-bold border border-red-100 animate-shake">
-                    <AlertCircle size={15} className="shrink-0" />
-                    <span>{error}</span>
+                  <div className="bg-rose-50 text-rose-700 p-3.5 rounded-2xl border border-rose-200 space-y-2">
+                    <div className="flex items-start gap-2 text-xs font-bold">
+                      <AlertCircle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                      <span>{error}</span>
+                    </div>
+                    {unregisteredEmail && (
+                      <div className="pt-1 flex items-center justify-end">
+                        <button
+                          type="button"
+                          onClick={() => switchToRegisterWithEmail(unregisteredEmail)}
+                          className="text-[11px] font-black uppercase tracking-wider bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-xs transition-colors"
+                        >
+                          <span>Register Entity with this Email</span>
+                          <ArrowRight size={12} />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
+
                 {successMsg && (
                   <div className="bg-emerald-50 text-emerald-700 p-3 rounded-xl flex items-center gap-2 text-xs font-bold border border-emerald-100">
                     <CheckCircle2 size={15} className="shrink-0" />
@@ -576,12 +637,22 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <AuthInput 
-                  label="Business GSTIN (15 Digits)" 
-                  placeholder="27AABCU9603R1ZM"
-                  value={regGstin}
-                  onChange={(e: any) => setRegGstin(e.target.value.toUpperCase())}
-                />
+                <div>
+                  <AuthInput 
+                    label="Business GSTIN (15 Digits)" 
+                    placeholder="27AABCU9603R1ZM"
+                    value={regGstin}
+                    onChange={(e: any) => setRegGstin(e.target.value.toUpperCase())}
+                  />
+                  {regGstin.length >= 12 && (
+                    <div className="mt-1 flex items-center gap-1.5 text-[9px] text-slate-500 font-mono">
+                      <span className="text-slate-400">PAN Auto-detected:</span>
+                      <span className="font-bold text-survyx-navy bg-slate-100 px-1 py-0.5 rounded">
+                        {regGstin.substring(2, 12)}
+                      </span>
+                    </div>
+                  )}
+                </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 ml-1">
                     State / Region
@@ -641,22 +712,45 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <AuthInput 
-                  label="Create Password" 
-                  placeholder="••••••••" 
-                  type="password"
-                  value={regPassword}
-                  onChange={(e: any) => setRegPassword(e.target.value)}
-                  required
-                />
+                <div className="relative">
+                  <AuthInput 
+                    label="Create Password (min 6 chars)" 
+                    placeholder="••••••••" 
+                    type={showRegPassword ? 'text' : 'password'}
+                    value={regPassword}
+                    onChange={(e: any) => setRegPassword(e.target.value)}
+                    required
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => setShowRegPassword(!showRegPassword)}
+                    className="absolute right-3 top-8 text-slate-400 hover:text-slate-700"
+                  >
+                    {showRegPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
                 <AuthInput 
                   label="Confirm Password" 
                   placeholder="••••••••" 
-                  type="password"
+                  type={showRegPassword ? 'text' : 'password'}
                   value={regConfirmPassword}
                   onChange={(e: any) => setRegConfirmPassword(e.target.value)}
                   required
                 />
+              </div>
+
+              <div className="pt-1">
+                <label className="flex items-start gap-2.5 cursor-pointer text-left">
+                  <input
+                    type="checkbox"
+                    checked={agreedTerms}
+                    onChange={(e) => setAgreedTerms(e.target.checked)}
+                    className="w-4 h-4 mt-0.5 rounded text-survyx-blue focus:ring-survyx-blue border-slate-300 shrink-0"
+                  />
+                  <span className="text-[11px] text-slate-600 leading-snug">
+                    I confirm authority as designated signatory and agree to SURVYX Multi-Sig Escrow Covenants and Statutory Verification Protocols.
+                  </span>
+                </label>
               </div>
 
               {error && (
@@ -670,7 +764,7 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
                 type="submit"
                 className="w-full flex items-center justify-center gap-2 py-3.5 px-4 bg-survyx-navy hover:bg-slate-900 text-white rounded-xl shadow-xl shadow-blue-900/10 transition-all font-black uppercase tracking-wider text-xs group active:scale-98"
               >
-                <span>Register Entity & Save Credentials</span>
+                <span>Register Entity, Save Data & Enter Hub</span>
                 <ArrowRight className="group-hover:translate-x-1 transition-transform" size={15} />
               </button>
             </form>
@@ -683,6 +777,7 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
                 setMode(mode === 'login' ? 'register' : 'login');
                 setError('');
                 setSuccessMsg('');
+                setUnregisteredEmail(null);
               }}
               className="text-xs font-bold text-survyx-blue hover:underline uppercase tracking-wider"
             >
@@ -691,12 +786,136 @@ export default function Auth({ onLogin, onBack }: AuthProps) {
           </div>
         </motion.div>
 
+        {/* Registered Entities Table / Storage Preview */}
+        <div className="mt-6 bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/80 p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-2.5">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+              <Users size={13} className="text-slate-400" />
+              Registered Accounts in Database ({registeredAccounts.length}):
+            </span>
+            <span className="text-[9px] font-mono text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+              Persistent Storage
+            </span>
+          </div>
+          <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+            {registeredAccounts.map(acc => (
+              <div 
+                key={acc.id}
+                className="flex items-center justify-between p-2 rounded-xl bg-slate-50/80 border border-slate-200/60 text-xs hover:bg-white transition-colors"
+              >
+                <div className="flex items-center gap-2 truncate">
+                  <div className="w-5 h-5 rounded-md bg-survyx-navy text-white text-[9px] font-black flex items-center justify-center shrink-0">
+                    {acc.name.charAt(0)}
+                  </div>
+                  <div className="truncate text-left">
+                    <p className="text-[11px] font-bold text-slate-800 truncate">{acc.businessName}</p>
+                    <p className="text-[9px] text-slate-500 font-mono truncate">{acc.email} • {acc.euid}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleQuickLogin(acc)}
+                  className="px-2 py-1 bg-white hover:bg-survyx-blue hover:text-white border border-slate-200 text-[9px] font-black uppercase tracking-wider rounded-lg transition-colors shrink-0 shadow-2xs"
+                >
+                  Sign In
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Saved Session Info Bar */}
         <div className="mt-4 flex items-center justify-between text-slate-500 text-[10px] px-2 font-mono">
           <span>SURVYX Multi-Sig Registry ID Auth</span>
           <span>Encrypted Session Storage Active</span>
         </div>
       </div>
+
+      {/* Registration Success Modal */}
+      <AnimatePresence>
+        {showSuccessModal && registeredAccount && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl border border-slate-200 relative overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 left-0 h-2 bg-gradient-to-r from-emerald-500 via-teal-500 to-survyx-blue" />
+              
+              <div className="text-center">
+                <div className="w-16 h-16 rounded-3xl bg-emerald-50 text-emerald-600 mx-auto flex items-center justify-center mb-4 border border-emerald-200 shadow-lg shadow-emerald-500/10">
+                  <BadgeCheck size={36} />
+                </div>
+                
+                <h3 className="text-xl font-black text-survyx-navy">
+                  Entity Successfully Registered & Authenticated!
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Your business credentials and verification profile are saved to the encrypted registry database.
+                </p>
+
+                {/* Generated Identity Clearance Card */}
+                <div className="mt-5 p-4 rounded-2xl bg-slate-50 border border-slate-200 text-left space-y-2.5">
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                      Official Registry EUID:
+                    </span>
+                    <span className="text-xs font-mono font-black text-survyx-blue bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                      {registeredAccount.euid}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase">Legal Entity</span>
+                      <p className="font-bold text-slate-800 text-[11px] truncate">{registeredAccount.businessName}</p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase">Signatory</span>
+                      <p className="font-bold text-slate-800 text-[11px] truncate">{registeredAccount.name}</p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase">Corporate Email</span>
+                      <p className="font-mono text-slate-700 text-[10px] truncate">{registeredAccount.email}</p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase">Trust Score</span>
+                      <p className="font-black text-emerald-600 text-[11px]">800 / 1000 (SILVER)</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 flex flex-col sm:flex-row gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowSuccessModal(false);
+                      // User is already authenticated and session is active in context
+                    }}
+                    className="flex-1 py-3.5 px-4 bg-survyx-navy hover:bg-survyx-blue text-white rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-blue-900/10 transition-colors"
+                  >
+                    <span>Enter Marketplace Hub Now</span>
+                    <ArrowRight size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowSuccessModal(false);
+                      setMode('login');
+                      setEmail(registeredAccount.email);
+                      setPassword(registeredAccount.password || '');
+                    }}
+                    className="py-3.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs uppercase tracking-wider transition-colors"
+                  >
+                    <span>Test Sign In</span>
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Forgot Password Modal */}
       <AnimatePresence>

@@ -114,7 +114,7 @@ export default function Vault() {
                   </span>
                 </div>
                 <p className="text-xs text-red-700 font-medium mt-1">
-                  Reason: "{dispute.reason}". Active milestones are frozen pending Officer Priya Krishnamurthy's mediation verdict.
+                  Reason: "{dispute.reason}". Active milestones are frozen pending Officer Arya Sharma's mediation verdict.
                 </p>
               </div>
             </div>

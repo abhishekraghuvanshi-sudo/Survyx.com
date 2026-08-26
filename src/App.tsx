@@ -21,7 +21,8 @@ import {
   Sparkles,
   Plus,
   Shield,
-  Check
+  Check,
+  Info
 } from 'lucide-react';
 
 import { UserJourneyProvider, useUserJourney } from './context/UserJourneyContext';
@@ -38,6 +39,8 @@ import Vault from './pages/Vault';
 import Repository from './pages/Repository';
 import Verification from './pages/Verification';
 import Chat from './pages/Chat';
+import AboutUs from './pages/AboutUs';
+import SurvyxLogo from './components/SurvyxLogo';
 
 function AppContent() {
   const {
@@ -51,13 +54,50 @@ function AppContent() {
     setTradeMode
   } = useUserJourney();
 
-  const { currentView, user, profile, trustScore, verificationStatus, tradeMode, euid } = state;
+  const { currentView, user, profile, trustScore, verificationStatus, tradeMode, euid, notifications = [] } = state;
   const [showAccountMenu, setShowAccountMenu] = useState(false);
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  if (currentView === 'about' && !user) {
+    return (
+      <div className="bg-slate-50 min-h-screen">
+        {/* Navigation */}
+        <nav className="glass sticky top-0 z-40 px-6 py-4 border-b border-slate-200/60 backdrop-blur-xl bg-white/80">
+          <div className="max-w-7xl mx-auto flex justify-between items-center">
+            <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setCurrentView('landing')}>
+              <SurvyxLogo size="md" variant="dark" subtitle="People • Process • Technology" />
+            </div>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setCurrentView('landing')}
+                className="text-xs font-bold text-slate-600 hover:text-survyx-navy uppercase tracking-wider"
+              >
+                Back to Home
+              </button>
+              <button
+                onClick={() => setCurrentView('auth')}
+                className="bg-survyx-navy hover:bg-survyx-blue text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all"
+              >
+                Sign In / Register
+              </button>
+            </div>
+          </div>
+        </nav>
+        <main className="max-w-7xl mx-auto px-6 pt-10">
+          <AboutUs onBackToHub={() => setCurrentView('landing')} />
+        </main>
+        <SurvyxAiBot />
+      </div>
+    );
+  }
 
   if (currentView === 'landing' && !user) {
     return (
       <>
-        <Landing onGetStarted={() => setCurrentView('auth')} />
+        <Landing 
+          onGetStarted={() => setCurrentView('auth')} 
+          onOpenAbout={() => setCurrentView('about')}
+        />
         <SurvyxAiBot />
       </>
     );
@@ -68,7 +108,7 @@ function AppContent() {
       <>
         <Auth 
           onLogin={(email, passwordOrName, customData) => {
-            loginUser(email, passwordOrName, customData);
+            return loginUser(email, passwordOrName, customData);
           }} 
           onBack={() => setCurrentView('landing')} 
         />
@@ -124,7 +164,13 @@ function AppContent() {
              title="Trade Concierge Notifications"
            >
              <Bell size={18} />
-             <div className="absolute top-1.5 right-1.5 w-2 h-2 bg-survyx-blue rounded-full border-2 border-white" />
+             {unreadCount > 0 ? (
+               <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-white animate-pulse">
+                 {unreadCount}
+               </span>
+             ) : (
+               <div className="absolute top-1.5 right-1.5 w-2 h-2 bg-survyx-blue rounded-full border-2 border-white" />
+             )}
            </button>
 
            {/* Account & Profile Trigger */}
@@ -256,15 +302,9 @@ function AppContent() {
         <div className="p-6 flex flex-col h-full">
           <div 
             onClick={() => setCurrentView('dashboard')}
-            className="flex items-center space-x-3 mb-8 px-2 cursor-pointer group"
+            className="mb-8 px-2 cursor-pointer group"
           >
-            <div className="w-9 h-9 bg-survyx-blue rounded-xl flex items-center justify-center font-black text-white shadow-xl shadow-blue-500/20 text-lg group-hover:scale-105 transition-transform">
-              S
-            </div>
-            <div className="flex flex-col -space-y-1">
-              <h1 className="text-xl font-black tracking-tighter uppercase">SURVYX<span className="text-survyx-blue">.com</span></h1>
-              <span className="text-[7px] font-black uppercase tracking-[0.1em] text-blue-300">Global Hub Status</span>
-            </div>
+            <SurvyxLogo size="md" variant="light" subtitle="Global Hub Active" />
           </div>
           
           <nav className="space-y-1 flex-1">
@@ -291,6 +331,7 @@ function AppContent() {
               onClick={() => setCurrentView('chat')} 
               icon={<MessageSquare size={18}/>} 
               label="Trade Concierge" 
+              badge={unreadCount}
             />
             <NavButton 
               active={currentView === 'verification'} 
@@ -305,6 +346,12 @@ function AppContent() {
                  onClick={() => setCurrentView('repository')} 
                  icon={<FileText size={18}/>} 
                  label="Repository" 
+               />
+               <NavButton 
+                 active={currentView === 'about'} 
+                 onClick={() => setCurrentView('about')} 
+                 icon={<Info size={18}/>} 
+                 label="About SURVYX" 
                />
             </div>
           </nav>
@@ -362,6 +409,7 @@ function AppContent() {
           {currentView === 'repository' && <Repository key="repository" />}
           {currentView === 'verification' && <Verification key="verification" />}
           {currentView === 'chat' && <Chat key="chat" />}
+          {currentView === 'about' && <AboutUs key="about" onBackToHub={() => setCurrentView('dashboard')} />}
         </AnimatePresence>
       </main>
 

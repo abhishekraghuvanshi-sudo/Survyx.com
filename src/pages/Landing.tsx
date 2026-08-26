@@ -25,8 +25,15 @@ import {
   Award,
   Bot
 } from 'lucide-react';
+import SurvyxLogo from '../components/SurvyxLogo';
 
-export default function Landing({ onGetStarted }: { onGetStarted: () => void }) {
+export default function Landing({ 
+  onGetStarted,
+  onOpenAbout
+}: { 
+  onGetStarted: () => void;
+  onOpenAbout?: () => void;
+}) {
   // Live Escrow Calculator State
   const [calcAmount, setCalcAmount] = useState<number>(2500000);
   const [selectedIndustry, setSelectedIndustry] = useState<string>('Renewable Energy');
@@ -55,30 +62,36 @@ export default function Landing({ onGetStarted }: { onGetStarted: () => void }) 
       <nav className="glass sticky top-0 z-40 px-6 py-4 border-b border-slate-200/60 backdrop-blur-xl bg-white/80">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="flex items-center space-x-3 group cursor-pointer" onClick={onGetStarted}>
-            <div className="w-10 h-10 bg-survyx-navy rounded-xl flex items-center justify-center font-black text-white shadow-xl group-hover:bg-survyx-blue transition-colors duration-300 text-lg">
-              S
-            </div>
-            <div className="flex flex-col -space-y-0.5">
-              <h1 className="text-xl font-black tracking-tighter text-survyx-navy">
-                SURVYX<span className="text-survyx-blue">.com</span>
-              </h1>
-              <span className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-400 group-hover:text-survyx-blue transition-colors">
-                People • Process • Technology
-              </span>
-            </div>
+            <SurvyxLogo size="md" variant="dark" subtitle="People • Process • Technology" />
           </div>
 
           <div className="hidden md:flex items-center space-x-8 text-[11px] font-bold uppercase tracking-wider text-slate-600">
             <a href="#protocol" className="hover:text-survyx-blue transition-colors">The 5 Pillars</a>
             <a href="#calculator" className="hover:text-survyx-blue transition-colors">Escrow Calculator</a>
+            {onOpenAbout && (
+              <button 
+                onClick={onOpenAbout} 
+                className="hover:text-survyx-blue transition-colors font-bold uppercase tracking-wider text-slate-600"
+              >
+                About Us
+              </button>
+            )}
             <a href="#ai-assistant" className="hover:text-survyx-blue transition-colors flex items-center gap-1">
               <Sparkles size={13} className="text-survyx-blue" />
-              AI Trade Copilot
+              Officer Arya
             </a>
             <a href="#shift" className="hover:text-survyx-blue transition-colors">Governance</a>
           </div>
 
           <div className="flex items-center gap-3">
+            {onOpenAbout && (
+              <button
+                onClick={onOpenAbout}
+                className="hidden sm:block text-[11px] font-bold uppercase tracking-wider text-slate-600 hover:text-survyx-blue transition-colors px-2 py-2"
+              >
+                About Us
+              </button>
+            )}
             <button 
               onClick={onGetStarted} 
               className="hidden sm:block text-[11px] font-bold uppercase tracking-wider text-survyx-navy hover:text-survyx-blue transition-colors px-3 py-2"
@@ -354,11 +367,11 @@ export default function Landing({ onGetStarted }: { onGetStarted: () => void }) 
                   Integrated AI Assistant
                 </div>
                 <h2 className="text-3xl sm:text-4xl font-black tracking-tight leading-tight">
-                  Meet Officer Priya Krishnamurthy. <br />
+                  Meet Officer Arya Sharma. <br />
                   <span className="text-survyx-blue">Your AI Trade & Governance Copilot.</span>
                 </h2>
                 <p className="text-slate-300 text-sm leading-relaxed">
-                  Have questions about structuring an institutional RFQ, NABL test standards, milestone release timings, or supplier KYC? Priya is accessible 24/7 across the entire platform.
+                  Have questions about structuring an institutional RFQ, NABL test standards, milestone release timings, or supplier KYC? Officer Arya is accessible 24/7 across the entire platform.
                 </p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
@@ -399,10 +412,10 @@ export default function Landing({ onGetStarted }: { onGetStarted: () => void }) 
                 <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                   <div className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-full bg-survyx-navy flex items-center justify-center text-white text-xs font-bold">
-                      P
+                      A
                     </div>
                     <div>
-                      <p className="text-xs font-black text-slate-900">Officer Priya Krishnamurthy</p>
+                      <p className="text-xs font-black text-slate-900">Officer Arya Sharma</p>
                       <p className="text-[9px] text-slate-400 font-mono">Senior Registry Officer • Live</p>
                     </div>
                   </div>
@@ -424,7 +437,7 @@ export default function Landing({ onGetStarted }: { onGetStarted: () => void }) 
                 </div>
 
                 <div className="pt-2 text-[10px] text-slate-400 font-mono text-center">
-                  Try asking Priya directly via the floating bot icon at the bottom-right!
+                  Try asking Officer Arya directly via the floating bot icon at the bottom-right!
                 </div>
               </div>
             </div>
@@ -450,6 +463,14 @@ export default function Landing({ onGetStarted }: { onGetStarted: () => void }) 
             >
               Access Marketplace Hub →
             </button>
+            {onOpenAbout && (
+              <button
+                onClick={onOpenAbout}
+                className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 px-8 py-4 rounded-xl font-bold uppercase tracking-wider text-xs transition-all shadow-md active:scale-95"
+              >
+                Read About Us
+              </button>
+            )}
           </div>
         </div>
       </section>
@@ -459,18 +480,19 @@ export default function Landing({ onGetStarted }: { onGetStarted: () => void }) 
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
             <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-survyx-navy rounded-lg flex items-center justify-center font-black text-white text-sm">
-                S
-              </div>
-              <span className="text-base font-black text-survyx-navy tracking-tight">
-                SURVYX<span className="text-survyx-blue">.com</span>
-              </span>
-              <span className="text-slate-300">|</span>
-              <span className="text-xs text-slate-400">Global B2B Managed Marketplace</span>
+              <SurvyxLogo size="sm" variant="dark" subtitle="Global B2B Managed Marketplace" />
             </div>
-            <p className="text-xs text-slate-400">
-              © {new Date().getFullYear()} SURVYX GLOBAL TRADE REGISTRY • All Trade IDs Regulated & Audited.
-            </p>
+            <div className="flex items-center gap-6 text-xs text-slate-500">
+              {onOpenAbout && (
+                <button onClick={onOpenAbout} className="hover:text-survyx-blue transition-colors">
+                  About Us
+                </button>
+              )}
+              <span className="text-slate-300">|</span>
+              <p className="text-xs text-slate-400">
+                © {new Date().getFullYear()} SURVYX GLOBAL TRADE REGISTRY • All Trade IDs Regulated & Audited.
+              </p>
+            </div>
           </div>
         </div>
       </footer>

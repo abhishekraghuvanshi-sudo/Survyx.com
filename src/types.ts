@@ -1,4 +1,4 @@
-export type View = 'landing' | 'auth' | 'dashboard' | 'bids' | 'vault' | 'verification' | 'chat' | 'repository';
+export type View = 'landing' | 'auth' | 'dashboard' | 'bids' | 'vault' | 'verification' | 'chat' | 'repository' | 'about';
 
 export type VerificationStatus = 'unstarted' | 'draft' | 'under_review' | 'verified' | 'rejected';
 
@@ -87,9 +87,29 @@ export interface RFQItem {
 }
 
 export interface ChatMessage {
-  role: 'user' | 'priya';
+  role: 'user' | 'officer' | 'arya' | 'priya';
   content: string;
   timestamp: string;
+}
+
+export type NotificationCategory = 'Escrow Updates' | 'Registry Alerts' | 'Marketplace Offers';
+
+export type NotificationPriority = 'urgent' | 'high' | 'normal';
+
+export interface AppNotification {
+  id: string;
+  category: NotificationCategory;
+  title: string;
+  description: string;
+  timestamp: string;
+  read: boolean;
+  priority: NotificationPriority;
+  referenceId?: string;
+  amount?: string;
+  entityName?: string;
+  targetView?: View;
+  actionLabel?: string;
+  officerNote?: string;
 }
 
 export interface UserJourneyState {
@@ -114,6 +134,9 @@ export interface UserJourneyState {
 
   // RFQs & Bidding Flow
   rfqs: RFQItem[];
+
+  // Notifications Feed
+  notifications: AppNotification[];
 
   // Chat Flow
   messages: ChatMessage[];

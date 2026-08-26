@@ -19,6 +19,7 @@ export interface UserAccount {
   trustScore: number;
   governanceTier: 'STANDARD' | 'SILVER' | 'GOLD' | 'PLATINUM';
   rememberMe?: boolean;
+  isNewRegistration?: boolean;
 }
 
 const ACCOUNTS_STORAGE_KEY = 'survyx_registered_accounts_v2';
@@ -191,4 +192,138 @@ export function setRememberedCredentials(creds: { email?: string; password?: str
   } catch (e) {
     console.warn('Error saving remembered credentials:', e);
   }
+}
+
+/**
+ * Find account by email or phone
+ */
+export function findAccountByIdentifier(identifier: string): UserAccount | undefined {
+  if (!identifier) return undefined;
+  const accounts = getStoredAccounts();
+  const clean = identifier.trim().toLowerCase();
+  const digitsOnly = clean.replace(/\D/g, '');
+
+  return accounts.find(a => {
+    const accEmail = a.email.toLowerCase();
+    const accDigits = a.phone.replace(/\D/g, '');
+    return accEmail === clean || (digitsOnly.length >= 8 && accDigits.includes(digitsOnly));
+  });
+}
+
+/**
+ * Strict authentication check
+ */
+export function authenticateCredentials(identifier: string, password?: string): {
+  success: boolean;
+  account?: UserAccount;
+  error?: string;
+  requiresRegistration?: boolean;
+} {
+  if (!identifier || !identifier.trim()) {
+    return { success: false, error: 'Please enter your corporate email or registered mobile number.' };
+  }
+
+  const account = findAccountByIdentifier(identifier);
+  if (!account) {
+    return {
+      success: false,
+      error: `No registered entity found for "${identifier}". Please register your enterprise entity first.`,
+      requiresRegistration: true
+    };
+  }
+
+  if (password) {
+    // If account has a password, check it
+    if (account.password && account.password !== password) {
+      return {
+        success: false,
+        error: 'Incorrect access password for this entity account. Please verify credentials or reset password.'
+      };
+    }
+  }
+
+  // Update last login
+  const updated = saveOrUpdateAccount({
+    ...account,
+    lastLoginAt: new Date().toISOString()
+  });
+
+  setActiveSession(updated);
+
+  return {
+    success: true,
+    account: updated
+  };
+}
+
+/**
+ * Register and save a new entity account
+ */
+export function registerNewEntity(data: {
+  name: string;
+  businessName: string;
+  gstin?: string;
+  pan?: string;
+  state?: string;
+  industryCategory?: string;
+  email: string;
+  phone?: string;
+  password?: string;
+  role?: 'buyer' | 'supplier';
+}): { success: boolean; account?: UserAccount; error?: string } {
+  if (!data.name || !data.name.trim()) {
+    return { success: false, error: 'Authorized Signatory Full Name is required.' };
+  }
+  if (!data.businessName || !data.businessName.trim()) {
+    return { success: false, error: 'Legal Business Name is required.' };
+  }
+  if (!data.email || !data.email.includes('@')) {
+    return { success: false, error: 'A valid corporate email address is required.' };
+  }
+  if (!data.password || data.password.length < 6) {
+    return { success: false, error: 'Password must be at least 6 characters long.' };
+  }
+
+  const cleanEmail = data.email.trim().toLowerCase();
+  const existing = findAccountByIdentifier(cleanEmail);
+  if (existing) {
+    return {
+      success: false,
+      error: `An entity is already registered with ${cleanEmail}. Please sign in with your credentials.`
+    };
+  }
+
+  const stateCode = (data.state || 'MH').substring(0, 2).toUpperCase();
+  const randomNum = Math.floor(1000 + Math.random() * 9000);
+  const cleanGstin = (data.gstin || '27AABCU9603R1ZM').toUpperCase();
+  const pan = cleanGstin.length >= 12 ? cleanGstin.substring(2, 12) : (data.pan || 'AABCU9603R');
+
+  const newAccount: UserAccount = {
+    id: `usr_${Date.now()}_${randomNum}`,
+    email: cleanEmail,
+    phone: data.phone ? data.phone.trim() : '+91 98200 00000',
+    password: data.password,
+    name: data.name.trim(),
+    businessName: data.businessName.trim().toUpperCase(),
+    gstin: cleanGstin,
+    pan: pan,
+    state: data.state || 'Maharashtra',
+    industryCategory: data.industryCategory || 'Renewable Energy Infrastructure',
+    euid: `SVX-IND-${randomNum}-${stateCode}`,
+    role: data.role || 'buyer',
+    createdAt: new Date().toISOString(),
+    lastLoginAt: new Date().toISOString(),
+    verificationStatus: 'under_review',
+    trustScore: 800,
+    governanceTier: 'SILVER',
+    rememberMe: true
+  };
+
+  saveOrUpdateAccount(newAccount);
+  setActiveSession(newAccount);
+
+  return {
+    success: true,
+    account: newAccount
+  };
 }

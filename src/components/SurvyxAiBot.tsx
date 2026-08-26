@@ -22,7 +22,7 @@ import {
   Cpu
 } from 'lucide-react';
 import { useUserJourney } from '../context/UserJourneyContext';
-import { getPriyaResponse } from '../services/geminiService';
+import { getAryaResponse } from '../services/geminiService';
 
 const SUGGESTED_PROMPTS = [
   {
@@ -110,10 +110,10 @@ User Profile:
 `;
 
     try {
-      const reply = await getPriyaResponse(query, sessionContext);
+      const reply = await getAryaResponse(query, sessionContext);
       addOfficerMessage(reply);
     } catch (err) {
-      addOfficerMessage("Officer Priya here. I am monitoring your trade ledger and registry status. Let me know if you would like me to assist with RFQ structuring or Escrow compliance.");
+      addOfficerMessage("Officer Arya Sharma here. I am monitoring your trade ledger and registry status. Let me know if you would like me to assist with RFQ structuring or Escrow compliance.");
     } finally {
       setIsLoading(false);
     }
@@ -202,15 +202,16 @@ User Profile:
                   <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-survyx-blue to-cyan-500 p-0.5 shadow-lg">
                     <img 
                       src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80" 
-                      alt="Officer Priya" 
+                      alt="Officer Arya" 
                       className="w-full h-full object-cover rounded-2xl" 
+                      referrerPolicy="no-referrer"
                     />
                   </div>
-                  <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-survyx-navy rounded-full" />
+                  <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 border-2 border-survyx-navy rounded-full" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="text-xs font-black tracking-tight text-white">Officer Priya Krishnamurthy</h3>
+                    <h3 className="text-xs font-black tracking-tight text-white">Officer Arya Sharma</h3>
                     <span className="px-1.5 py-0.5 rounded bg-blue-500/30 text-blue-200 text-[8px] font-mono font-bold">SVX-402</span>
                   </div>
                   <p className="text-[10px] text-blue-200/80 font-medium">Senior Registry & Escrow Governance Officer</p>
@@ -251,23 +252,23 @@ User Profile:
             {/* Message Area */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/40">
               {messages.map((msg, idx) => {
-                const isPriya = msg.role === 'priya';
+                const isOfficer = msg.role !== 'user';
                 return (
                   <motion.div
                     key={idx}
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className={`flex flex-col ${isPriya ? 'items-start' : 'items-end'}`}
+                    className={`flex flex-col ${isOfficer ? 'items-start' : 'items-end'}`}
                   >
                     <div className="flex items-start gap-2 max-w-[90%]">
-                      {isPriya && (
+                      {isOfficer && (
                         <div className="w-6 h-6 rounded-lg bg-survyx-navy text-white flex items-center justify-center shrink-0 text-[10px] font-bold mt-1">
-                          P
+                          A
                         </div>
                       )}
                       <div
                         className={`p-3.5 rounded-2xl text-xs leading-relaxed shadow-sm group relative ${
-                          isPriya
+                          isOfficer
                             ? 'bg-white border border-slate-200 text-slate-800 rounded-tl-sm'
                             : 'bg-survyx-navy text-white rounded-tr-sm'
                         }`}
@@ -277,7 +278,7 @@ User Profile:
                         </div>
 
                         {/* Quick action buttons if AI mentioned certain domains */}
-                        {isPriya && (
+                        {isOfficer && (
                           <div className="mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap gap-1.5">
                             {msg.content.toLowerCase().includes('escrow') && (
                               <button
@@ -329,11 +330,11 @@ User Profile:
                   className="flex items-start gap-2"
                 >
                   <div className="w-6 h-6 rounded-lg bg-survyx-navy text-white flex items-center justify-center shrink-0 text-[10px] font-bold mt-1">
-                    P
+                    A
                   </div>
                   <div className="bg-white border border-slate-200 p-3.5 rounded-2xl rounded-tl-sm text-xs text-slate-500 shadow-sm flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-survyx-blue animate-ping" />
-                    <span>Officer Priya is checking the trade ledger & registry...</span>
+                    <span>Officer Arya is checking the trade ledger & registry...</span>
                   </div>
                 </motion.div>
               )}
@@ -376,7 +377,7 @@ User Profile:
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Ask Priya about RFQ specs, Escrow status, KYC or dispute locks..."
+                  placeholder="Ask Officer Arya about RFQ specs, Escrow status, KYC or dispute locks..."
                   rows={isExpanded ? 2 : 1}
                   className="w-full bg-transparent text-xs text-slate-900 placeholder:text-slate-400 resize-none outline-none max-h-24 px-1 py-1"
                 />

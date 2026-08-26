@@ -9,7 +9,9 @@ import {
   EscrowDispute,
   EscrowTransaction,
   RFQItem,
-  ChatMessage
+  ChatMessage,
+  AppNotification,
+  NotificationCategory
 } from '../types';
 import {
   UserAccount,
@@ -23,6 +25,90 @@ import {
 } from '../lib/authStorage';
 
 const STORAGE_KEY = 'survyx_user_journey_state_v1';
+
+export const initialNotifications: AppNotification[] = [
+  {
+    id: 'notif-1',
+    category: 'Escrow Updates',
+    title: 'Milestone 2 In-Transit Inspection Triggered',
+    description: 'Logistics GPS milestone (40% - ₹5,60,000) for Solar Inverters is ready for tripartite sign-off upon e-Way bill carrier gate-in.',
+    timestamp: '10 mins ago',
+    read: false,
+    priority: 'high',
+    referenceId: 'M-02',
+    amount: '₹5,60,000',
+    targetView: 'vault',
+    actionLabel: 'Inspect Milestone 2',
+    officerNote: 'Officer Arya Sharma has pre-audited carrier consignment #TR-8819. One signature needed.'
+  },
+  {
+    id: 'notif-2',
+    category: 'Marketplace Offers',
+    title: 'New Institutional Bid on RFQ-8822',
+    description: 'Tata Steel B2B Supply submitted a verified bid of ₹27,80,000 for 10 Tons Aluminum Ingots (99.7% Pure) with 5-day delivery.',
+    timestamp: '25 mins ago',
+    read: false,
+    priority: 'urgent',
+    referenceId: 'RFQ-8822',
+    amount: '₹27,80,000',
+    entityName: 'Tata Steel B2B Supply Ltd',
+    targetView: 'bids',
+    actionLabel: 'Review Supplier Bid',
+    officerNote: 'Supplier holds 980/1000 Trust Score and has executed 42 multi-signature escrow settlements.'
+  },
+  {
+    id: 'notif-3',
+    category: 'Registry Alerts',
+    title: 'Trust Score Elevated to Gold Tier (742/1000)',
+    description: 'Your Sovereign EUID verification level unlocked reduced 0.50% escrow fee structure and instant RFQ matchmaking.',
+    timestamp: '1 hour ago',
+    read: false,
+    priority: 'high',
+    referenceId: 'EUID-GOLD',
+    targetView: 'verification',
+    actionLabel: 'View EUID Badge',
+    officerNote: 'Upload Certificate of Incorporation (COI) to unlock Platinum Sovereign Tier.'
+  },
+  {
+    id: 'notif-4',
+    category: 'Escrow Updates',
+    title: 'Tripartite Escrow Balance Secured (₹14,00,000)',
+    description: 'Deposit confirmed by Escrow Trustee Bank. Milestone 1 (30%) was released to staging yard.',
+    timestamp: '3 hours ago',
+    read: true,
+    priority: 'normal',
+    referenceId: 'TXN-8812',
+    amount: '₹14,00,000',
+    targetView: 'vault',
+    actionLabel: 'Open Vault Ledger'
+  },
+  {
+    id: 'notif-5',
+    category: 'Marketplace Offers',
+    title: 'Enterprise RFQ Invitation: Larsen & Toubro',
+    description: 'Larsen & Toubro Heavy Infrastructure invited your enterprise to submit quotation for 5,000 Heavy Solar Capacitors.',
+    timestamp: '5 hours ago',
+    read: true,
+    priority: 'high',
+    referenceId: 'RFQ-7731',
+    amount: '₹42,00,000',
+    entityName: 'Larsen & Toubro Ltd',
+    targetView: 'bids',
+    actionLabel: 'Submit Quote'
+  },
+  {
+    id: 'notif-6',
+    category: 'Registry Alerts',
+    title: 'GSTN Compliance Verification Cleared',
+    description: 'Automated GSTIN reconciliation passed with 100% active filing status and verified principal office.',
+    timestamp: 'Yesterday',
+    read: true,
+    priority: 'normal',
+    referenceId: 'GST-27AABCU9603R1ZM',
+    targetView: 'repository',
+    actionLabel: 'View Tax Certificate'
+  }
+];
 
 const initialProfile: VerificationProfile = {
   businessName: 'KUMAR INDUSTRIAL SOLUTIONS PVT LTD',
@@ -182,8 +268,8 @@ const initialRFQs: RFQItem[] = [
 
 const initialMessages: ChatMessage[] = [
   {
-    role: 'priya',
-    content: "Greetings Abhishek. I am Priya Krishnamurthy, your assigned Senior Registry Officer at SURVYX. I am monitoring your trade compliance and Escrow Vault. How may I assist your business operations today?",
+    role: 'officer',
+    content: "Greetings. I am Officer Arya Sharma, your assigned Senior Registry Officer at SURVYX. I am monitoring your trade compliance, active RFQs, and Escrow Vault. How may I assist your business operations today?",
     timestamp: new Date().toISOString()
   }
 ];
@@ -202,7 +288,7 @@ const defaultState: UserJourneyState = {
     submittedAt: null,
     queuePosition: 42,
     estimatedCompletion: 'Today, 4:00 PM',
-    assignedOfficer: 'Priya Krishnamurthy',
+    assignedOfficer: 'Officer Arya Sharma',
     officerRole: 'Senior Registry Compliance Officer',
     auditNotes: [
       'GSTIN format verified against GSTN portal',
@@ -219,6 +305,7 @@ const defaultState: UserJourneyState = {
   transactions: initialTransactions,
 
   rfqs: initialRFQs,
+  notifications: initialNotifications,
   messages: initialMessages,
   unreadMessagesCount: 0,
 
@@ -259,6 +346,12 @@ interface UserJourneyContextType {
 
   // RFQ Actions
   punchRequirement: (req: { title: string; category: string; budget: string; description: string }) => void;
+
+  // Notifications Actions
+  markNotificationAsRead: (id: string) => void;
+  markAllNotificationsAsRead: () => void;
+  dismissNotification: (id: string) => void;
+  addNotification: (notification: Omit<AppNotification, 'id' | 'timestamp' | 'read'>) => void;
 
   // Chat Actions
   sendMessage: (content: string) => void;
@@ -375,103 +468,143 @@ export const UserJourneyProvider: React.FC<{ children: React.ReactNode }> = ({ c
   }, []);
 
   const loginUser = useCallback((identifierOrEmail: string, passwordOrName?: string, customData?: Partial<UserAccount>) => {
+    const cleanId = (identifierOrEmail || '').trim().toLowerCase();
+    const cleanDigits = cleanId.replace(/\D/g, '');
     const accounts = getStoredAccounts();
-    const cleanId = identifierOrEmail.trim().toLowerCase();
     
-    // Find matching account by email or phone or ID
-    let matchedAccount = accounts.find(
-      a => a.email.toLowerCase() === cleanId || a.phone.replace(/\D/g, '') === cleanId.replace(/\D/g, '')
-    );
+    // Find matching registered account
+    const matchedAccount = accounts.find(a => {
+      const accEmail = a.email.toLowerCase();
+      const accDigits = a.phone.replace(/\D/g, '');
+      return accEmail === cleanId || (cleanDigits.length >= 8 && accDigits.includes(cleanDigits)) || a.id === identifierOrEmail;
+    });
 
+    // If entity is not registered in the system
     if (!matchedAccount) {
-      // Create account dynamically if it's a new login or OAuth
-      const displayName = customData?.name || passwordOrName || identifierOrEmail.split('@')[0] || 'Enterprise User';
-      const cleanName = displayName.replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-      const stateCode = customData?.state?.substring(0, 2).toUpperCase() || 'MH';
-      const randomEuidNum = Math.floor(1000 + Math.random() * 9000);
-      
-      matchedAccount = {
-        id: `usr_${Date.now()}`,
-        email: identifierOrEmail.includes('@') ? identifierOrEmail : `${cleanId}@survyx.com`,
-        phone: customData?.phone || (!identifierOrEmail.includes('@') ? identifierOrEmail : '+91 98200 54321'),
-        password: customData?.password || passwordOrName || 'password123',
-        name: cleanName,
-        businessName: customData?.businessName || `${cleanName.toUpperCase()} SOLUTIONS`,
-        gstin: customData?.gstin || '27AABCU9603R1ZM',
-        pan: customData?.pan || 'AABCU9603R',
-        state: customData?.state || 'Maharashtra',
-        industryCategory: customData?.industryCategory || 'Renewable Energy Infrastructure',
-        euid: customData?.euid || `SVX-IND-${randomEuidNum}-${stateCode}`,
-        role: customData?.role || 'buyer',
-        createdAt: new Date().toISOString(),
-        lastLoginAt: new Date().toISOString(),
-        verificationStatus: customData?.verificationStatus || 'verified',
-        trustScore: customData?.trustScore || 850,
-        governanceTier: customData?.governanceTier || 'GOLD',
-        rememberMe: customData?.rememberMe ?? true
-      };
-    } else {
-      matchedAccount = {
-        ...matchedAccount,
-        ...customData,
-        lastLoginAt: new Date().toISOString()
-      };
+      // If explicit custom registration was passed (e.g. from OAuth or forced admin), we can allow, otherwise reject
+      if (customData?.isNewRegistration) {
+        // Proceed with registration flow
+      } else {
+        return {
+          success: false,
+          error: `No registered entity found for "${identifierOrEmail}". Please register your enterprise entity first before entering.`,
+          requiresRegistration: true
+        };
+      }
     }
 
-    // Save to persistent storage
-    saveOrUpdateAccount(matchedAccount);
-    setActiveSession(matchedAccount);
-    setActiveAccountState(matchedAccount);
+    // Password validation for registered accounts
+    if (matchedAccount && passwordOrName && matchedAccount.password) {
+      // Check password if it's not a direct quick switch or mobile token
+      if (passwordOrName !== matchedAccount.password && passwordOrName !== 'Mobile Sign In' && !passwordOrName.includes('SSO User')) {
+        return {
+          success: false,
+          error: 'Incorrect access password for this registered entity. Please verify your credentials or reset your password.'
+        };
+      }
+    }
+
+    const currentAcc: UserAccount = matchedAccount || {
+      id: `usr_${Date.now()}`,
+      email: cleanId.includes('@') ? cleanId : `${cleanId}@survyx.com`,
+      phone: customData?.phone || '+91 98200 12345',
+      password: customData?.password || passwordOrName || 'password123',
+      name: customData?.name || 'Enterprise Signatory',
+      businessName: customData?.businessName || 'NEW INDUSTRIAL SOLUTIONS LTD',
+      gstin: customData?.gstin || '27AABCU9603R1ZM',
+      pan: customData?.pan || 'AABCU9603R',
+      state: customData?.state || 'Maharashtra',
+      industryCategory: customData?.industryCategory || 'Renewable Energy Infrastructure',
+      euid: customData?.euid || `SVX-IND-${Math.floor(1000 + Math.random() * 9000)}-MH`,
+      role: customData?.role || 'buyer',
+      createdAt: new Date().toISOString(),
+      lastLoginAt: new Date().toISOString(),
+      verificationStatus: customData?.verificationStatus || 'verified',
+      trustScore: customData?.trustScore || 850,
+      governanceTier: customData?.governanceTier || 'GOLD',
+      rememberMe: customData?.rememberMe ?? true
+    };
+
+    const updatedAccount: UserAccount = {
+      ...currentAcc,
+      ...customData,
+      lastLoginAt: new Date().toISOString()
+    };
+
+    // Save to persistent storage and active session
+    saveOrUpdateAccount(updatedAccount);
+    setActiveSession(updatedAccount);
+    setActiveAccountState(updatedAccount);
     setRegisteredAccounts(getStoredAccounts());
 
-    // Update state
+    // Update global state
     setState(prev => ({
       ...prev,
       user: {
-        email: matchedAccount!.email,
-        name: matchedAccount!.name
+        email: updatedAccount.email,
+        name: updatedAccount.name
       },
-      euid: matchedAccount!.euid,
-      trustScore: matchedAccount!.trustScore,
-      governanceTier: matchedAccount!.governanceTier,
-      verificationStatus: matchedAccount!.verificationStatus,
+      euid: updatedAccount.euid,
+      trustScore: updatedAccount.trustScore,
+      governanceTier: updatedAccount.governanceTier,
+      verificationStatus: updatedAccount.verificationStatus,
       profile: {
         ...prev.profile,
-        businessName: matchedAccount!.businessName,
-        gstin: matchedAccount!.gstin,
-        pan: matchedAccount!.pan,
-        authorizedSignatory: matchedAccount!.name,
-        contactEmail: matchedAccount!.email,
-        phone: matchedAccount!.phone,
-        industryCategory: matchedAccount!.industryCategory
+        businessName: updatedAccount.businessName,
+        gstin: updatedAccount.gstin,
+        pan: updatedAccount.pan,
+        authorizedSignatory: updatedAccount.name,
+        contactEmail: updatedAccount.email,
+        phone: updatedAccount.phone,
+        industryCategory: updatedAccount.industryCategory
       },
       currentView: 'dashboard'
     }));
 
-    return { success: true, account: matchedAccount };
+    return { success: true, account: updatedAccount };
   }, []);
 
   const registerUser = useCallback((accountData: Partial<UserAccount>) => {
+    const cleanEmail = (accountData.email || '').trim().toLowerCase();
     const accounts = getStoredAccounts();
-    const email = (accountData.email || '').trim().toLowerCase();
 
-    const existing = accounts.find(a => a.email.toLowerCase() === email);
-    if (existing && email) {
-      // Update existing
-      return loginUser(email, accountData.password, accountData);
+    if (!accountData.name || !accountData.name.trim()) {
+      return { success: false, message: 'Authorized Signatory Full Name is required.' };
+    }
+    if (!accountData.businessName || !accountData.businessName.trim()) {
+      return { success: false, message: 'Legal Business Name is required.' };
+    }
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      return { success: false, message: 'A valid corporate email address is required.' };
+    }
+    if (!accountData.password || accountData.password.length < 6) {
+      return { success: false, message: 'Password must be at least 6 characters.' };
+    }
+
+    const existing = accounts.find(a => a.email.toLowerCase() === cleanEmail);
+    if (existing) {
+      return {
+        success: false,
+        message: `An entity is already registered with email "${cleanEmail}". Please sign in with your credentials.`,
+        alreadyExists: true,
+        account: existing
+      };
     }
 
     const stateCode = (accountData.state || 'MH').substring(0, 2).toUpperCase();
     const randomNum = Math.floor(1000 + Math.random() * 9000);
+    const cleanGstin = (accountData.gstin || '27AABCN1234F1Z1').toUpperCase();
+    const pan = cleanGstin.length >= 12 ? cleanGstin.substring(2, 12) : (accountData.pan || 'AABCN1234F');
+
     const newAccount: UserAccount = {
-      id: `usr_${Date.now()}`,
-      email: accountData.email || `user${randomNum}@survyx.com`,
-      phone: accountData.phone || '+91 98200 00000',
-      password: accountData.password || 'password123',
-      name: accountData.name || accountData.businessName?.split(' ')[0] || 'Enterprise Member',
-      businessName: accountData.businessName || 'NEW ENTERPRISE PVT LTD',
-      gstin: accountData.gstin || '27AABCN1234F1Z1',
-      pan: accountData.pan || (accountData.gstin ? accountData.gstin.substring(2, 12) : 'AABCN1234F'),
+      id: `usr_${Date.now()}_${randomNum}`,
+      email: cleanEmail,
+      phone: accountData.phone ? accountData.phone.trim() : '+91 98200 00000',
+      password: accountData.password,
+      name: accountData.name.trim(),
+      businessName: accountData.businessName.trim().toUpperCase(),
+      gstin: cleanGstin,
+      pan: pan,
       state: accountData.state || 'Maharashtra',
       industryCategory: accountData.industryCategory || 'Renewable Energy Infrastructure',
       euid: `SVX-IND-${randomNum}-${stateCode}`,
@@ -479,9 +612,9 @@ export const UserJourneyProvider: React.FC<{ children: React.ReactNode }> = ({ c
       createdAt: new Date().toISOString(),
       lastLoginAt: new Date().toISOString(),
       verificationStatus: 'under_review',
-      trustScore: 780,
+      trustScore: 800,
       governanceTier: 'SILVER',
-      rememberMe: true
+      rememberMe: accountData.rememberMe ?? true
     };
 
     saveOrUpdateAccount(newAccount);
@@ -514,14 +647,14 @@ export const UserJourneyProvider: React.FC<{ children: React.ReactNode }> = ({ c
         ...prev.messages,
         {
           role: 'priya',
-          content: `Welcome to SURVYX Global Marketplace, ${newAccount.name}. Your institutional entity "${newAccount.businessName}" has been issued Registry EUID: ${newAccount.euid}. I am your dedicated Trade & Escrow Officer.`,
+          content: `Welcome to SURVYX Global Marketplace, ${newAccount.name}. Your institutional entity "${newAccount.businessName}" has been successfully recorded in the encrypted registry with Registry EUID: ${newAccount.euid}. I am your dedicated Trade & Escrow Compliance Officer.`,
           timestamp: new Date().toISOString()
         }
       ]
     }));
 
-    return { success: true, account: newAccount };
-  }, [loginUser]);
+    return { success: true, message: 'Entity registered and authenticated successfully.', account: newAccount };
+  }, []);
 
   const switchAccount = useCallback((accountId: string) => {
     const accounts = getStoredAccounts();
@@ -918,6 +1051,43 @@ export const UserJourneyProvider: React.FC<{ children: React.ReactNode }> = ({ c
     });
   }, []);
 
+  // --- Notification Handlers ---
+  const markNotificationAsRead = useCallback((id: string) => {
+    setState(prev => ({
+      ...prev,
+      notifications: (prev.notifications || initialNotifications).map(n => 
+        n.id === id ? { ...n, read: true } : n
+      )
+    }));
+  }, []);
+
+  const markAllNotificationsAsRead = useCallback(() => {
+    setState(prev => ({
+      ...prev,
+      notifications: (prev.notifications || initialNotifications).map(n => ({ ...n, read: true }))
+    }));
+  }, []);
+
+  const dismissNotification = useCallback((id: string) => {
+    setState(prev => ({
+      ...prev,
+      notifications: (prev.notifications || initialNotifications).filter(n => n.id !== id)
+    }));
+  }, []);
+
+  const addNotification = useCallback((notification: Omit<AppNotification, 'id' | 'timestamp' | 'read'>) => {
+    const newNotif: AppNotification = {
+      ...notification,
+      id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      timestamp: 'Just now',
+      read: false
+    };
+    setState(prev => ({
+      ...prev,
+      notifications: [newNotif, ...(prev.notifications || initialNotifications)]
+    }));
+  }, []);
+
   // --- Chat Handlers ---
   const sendMessage = useCallback((content: string) => {
     setState(prev => ({
@@ -984,6 +1154,10 @@ export const UserJourneyProvider: React.FC<{ children: React.ReactNode }> = ({ c
     depositFunds,
     resetEscrow,
     punchRequirement,
+    markNotificationAsRead,
+    markAllNotificationsAsRead,
+    dismissNotification,
+    addNotification,
     sendMessage,
     addOfficerMessage,
     clearChat,
@@ -1013,6 +1187,10 @@ export const UserJourneyProvider: React.FC<{ children: React.ReactNode }> = ({ c
     depositFunds,
     resetEscrow,
     punchRequirement,
+    markNotificationAsRead,
+    markAllNotificationsAsRead,
+    dismissNotification,
+    addNotification,
     sendMessage,
     addOfficerMessage,
     clearChat,
